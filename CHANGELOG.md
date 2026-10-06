@@ -32,9 +32,12 @@ moves to.
 - `.github/*` narrowed to the kit's three paths; a project's own workflow is not managed. `render`
   refuses inside a project.
 - `kit.lock` is written with TOML strings (a name outside the BMP could not be read back);
-  `validate()` refuses module-shadowing package names, branch names git refuses, and quotes in the
-  maintainer's name; a missing `uv`, `make` or `gh` is a sentence, not a traceback; `init` stages
-  again after `uv lock` and `ruff format`.
+  `validate()` refuses module-shadowing package names, names that are not project names for uv,
+  branch names git refuses or the rendered files cannot hold, a prefix under the base's name, and
+  quotes in the maintainer's name; a missing `uv`, `make` or `gh` is a sentence, not a traceback;
+  `init` stages again after `uv lock` and `ruff format`; `render` refuses the kit itself.
+- The reviewer-clone marker is removed from the environment of the harness's own tests (an autouse
+  fixture): in a reviewer's `make check` it had turned fourteen Stop-gate tests red.
 - The harness extracted from the source project (`v2` @ `606515e`, 2026-10-06): `make check`
   (ruff, basedpyright strict, import-linter, pytest with a 90 % branch-coverage floor), `make mutate`
   with its gate script, the Bash guard, the Stop gate, the format hook, `integrity.py`, `review.py`
