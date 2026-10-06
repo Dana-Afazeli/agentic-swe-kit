@@ -679,8 +679,10 @@ def project_from(kit_repo: Path, where: Path, *answers: str) -> Path:
 
 
 def no_markers(root: Path) -> bool:
+    """No conflict marker at the start of a line anywhere (prose may mention one in backticks)."""
+    marker = re.compile(r"^<{7} ", re.MULTILINE)
     return not any(
-        "<<<<<<<" in (root / p).read_text("utf-8", errors="replace") for p in files_of(root)
+        marker.search((root / p).read_text("utf-8", errors="replace")) for p in files_of(root)
     )
 
 
