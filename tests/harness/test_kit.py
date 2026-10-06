@@ -658,6 +658,34 @@ def kit_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "v0.2.0")
     git(repo, "tag", "v0.2.0")
+
+    # a branch one commit ahead of v0.2.0 (a target by name), then v0.3.0 on main: a new kit-owned
+    # pattern in its own kit.py with a file under it, and an executable script
+    git(repo, "switch", "-q", "-c", "feature")
+    (repo / "docs/kit/FEATURE.md").write_text("# On the feature branch\n", "utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "feature")
+    git(repo, "switch", "-q", "main")
+    kit_py_file.write_text(
+        kit_py_file.read_text("utf-8")
+        .replace('KIT_VERSION = "0.2.0"', 'KIT_VERSION = "0.3.0"')
+        .replace(
+            '    "kit.py",\n    "Makefile",\n', '    "kit.py",\n    "Makefile",\n    "extras/*",\n'
+        ),
+        "utf-8",
+    )
+    assert '"extras/*"' in kit_py_file.read_text("utf-8")
+    (repo / "extras").mkdir()
+    (repo / "extras/tool.txt").write_text("a kit-owned extra for kitpkg\n", "utf-8")
+    (repo / "scripts/run.sh").write_text("#!/bin/sh\necho kitpkg\n", "utf-8")
+    (repo / "scripts/run.sh").chmod(0o755)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "v0.3.0")
+    git(repo, "tag", "v0.3.0")
+    # and one more commit after the last tag, the same version: a target the default must not undo
+    fmt_hook.write_text(fmt_hook.read_text("utf-8") + "# after v0.3.0\n", "utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "after v0.3.0")
     return repo
 
 
@@ -678,18 +706,20 @@ def make_project(kit_repo: Path, where: Path, *answers: str) -> Path:
     return where
 
 
-_PROJECTS: dict[tuple[str, ...], Path] = {}
+@pytest.fixture(scope="module")
+def templates(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Where the projects the tests copy from are built: a directory of the module's own, so that
+    pytest's retention policy for a test's tmp_path cannot take it away."""
+    return tmp_path_factory.mktemp("templates")
 
 
-def project_from(kit_repo: Path, where: Path, *answers: str) -> Path:
+def project_from(kit_repo: Path, where: Path, templates: Path, *answers: str) -> Path:
     """`make_project`, built once per set of answers and copied: `init` costs a second each time,
     a copy of the result a few milliseconds."""
-    key = (str(kit_repo), *answers)
-    if key not in _PROJECTS:
-        _PROJECTS[key] = make_project(
-            kit_repo, where.parent / f"template-{len(_PROJECTS)}", *answers
-        )
-    shutil.copytree(_PROJECTS[key], where, symlinks=True)
+    template = templates / "-".join(["project", *answers]).replace("/", "_")
+    if not template.exists():
+        make_project(kit_repo, template, *answers)
+    shutil.copytree(template, where, symlinks=True)
     return where
 
 
@@ -701,8 +731,10 @@ def no_markers(root: Path) -> bool:
     )
 
 
-def test_update_merges_adds_removes_and_relocks(kit_repo: Path, tmp_path: Path) -> None:
-    project = project_from(kit_repo, tmp_path / "project")
+def test_update_merges_adds_removes_and_relocks(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
     pyproject = project / "pyproject.toml"
     pyproject.write_text(
         pyproject.read_text("utf-8").replace("dependencies = []", 'dependencies = ["httpx"]'),
@@ -729,14 +761,15 @@ def test_update_merges_adds_removes_and_relocks(kit_repo: Path, tmp_path: Path) 
     assert lock.commit == git(kit_repo, "rev-parse", "v0.2.0").strip()
     assert git(project, "diff", "--name-only") == ""  # staged
     assert "## v0.2.0" in result.stdout and "ruff selects C4" in result.stdout
-    assert "1 merged" in result.stdout or "merged" in result.stdout
+    # kit.py arrives by the hand-over, not by a merge: fmt_hook.py and pyproject.toml merge
+    assert "2 merged, 0 with conflicts, 1 added, 1 removed" in result.stdout
     assert "Next steps for the maintainer:" in result.stdout
 
 
 def test_update_keeps_a_local_edit_elsewhere_in_a_merged_file(
-    kit_repo: Path, tmp_path: Path
+    kit_repo: Path, tmp_path: Path, templates: Path
 ) -> None:
-    project = project_from(kit_repo, tmp_path / "project")
+    project = project_from(kit_repo, tmp_path / "project", templates)
     fmt_hook = project / "scripts/fmt_hook.py"
     lines = fmt_hook.read_text("utf-8").splitlines(keepends=True)
     lines[0] = '"""Our own first line.\n'
@@ -751,8 +784,10 @@ def test_update_keeps_a_local_edit_elsewhere_in_a_merged_file(
     assert "<<<<<<<" not in text
 
 
-def test_update_marks_a_collision_and_still_moves_the_lock(kit_repo: Path, tmp_path: Path) -> None:
-    project = project_from(kit_repo, tmp_path / "project")
+def test_update_marks_a_collision_and_still_moves_the_lock(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
     fmt_hook = project / "scripts/fmt_hook.py"
     fmt_hook.write_text(fmt_hook.read_text("utf-8") + "\n# our own last line\n", "utf-8")
     git(project, "commit", "-q", "-am", "ours, at the end too")
@@ -767,9 +802,9 @@ def test_update_marks_a_collision_and_still_moves_the_lock(kit_repo: Path, tmp_p
 
 
 def test_update_keeps_a_removed_file_the_project_changed_and_says_so(
-    kit_repo: Path, tmp_path: Path
+    kit_repo: Path, tmp_path: Path, templates: Path
 ) -> None:
-    project = project_from(kit_repo, tmp_path / "project")
+    project = project_from(kit_repo, tmp_path / "project", templates)
     note = project / "docs/kit/research/2026-09-29-toolchain-and-claude-code.md"
     note.write_text(note.read_text("utf-8") + "\nOur own addition.\n", "utf-8")
     git(project, "commit", "-q", "-am", "ours")
@@ -781,9 +816,9 @@ def test_update_keeps_a_removed_file_the_project_changed_and_says_so(
 
 
 def test_update_does_not_recreate_a_kit_file_the_project_deleted(
-    kit_repo: Path, tmp_path: Path
+    kit_repo: Path, tmp_path: Path, templates: Path
 ) -> None:
-    project = project_from(kit_repo, tmp_path / "project")
+    project = project_from(kit_repo, tmp_path / "project", templates)
     git(project, "rm", "-q", "docs/kit/SETUP.md")
     git(project, "commit", "-q", "-m", "no setup doc here")
 
@@ -793,9 +828,11 @@ def test_update_does_not_recreate_a_kit_file_the_project_deleted(
     assert "missing" in result.stdout and "docs/kit/SETUP.md" in result.stdout
 
 
-def test_update_merges_the_rendered_trees_not_the_raw_kit(kit_repo: Path, tmp_path: Path) -> None:
+def test_update_merges_the_rendered_trees_not_the_raw_kit(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
     project = project_from(
-        kit_repo, tmp_path / "project", "--base", "develop", "--branch-prefix", "unit"
+        kit_repo, tmp_path / "project", templates, "--base", "develop", "--branch-prefix", "unit"
     )
     git(project, "switch", "-q", "-c", "unit-kit-update")
     result = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
@@ -810,10 +847,10 @@ def test_update_merges_the_rendered_trees_not_the_raw_kit(kit_repo: Path, tmp_pa
 
 
 def test_update_refuses_what_cannot_be_right(
-    kit_repo: Path, tmp_path: Path, copy_of_the_kit: Path
+    kit_repo: Path, tmp_path: Path, copy_of_the_kit: Path, templates: Path
 ) -> None:
     assert kit_py(copy_of_the_kit, "update", "--no-sync").returncode == 2  # the kit, no lock
-    project = project_from(kit_repo, tmp_path / "project2")
+    project = project_from(kit_repo, tmp_path / "project2", templates)
 
     unknown = kit_py(project, "update", "--to", "v9.9.9", "--no-sync")
     assert unknown.returncode == 2 and "no ref 'v9.9.9'" in unknown.stdout
@@ -831,7 +868,7 @@ def test_update_refuses_what_cannot_be_right(
     assert kit_py(project, "update", "--to", "v0.2.0", "--no-sync").returncode == 0
     git(project, "commit", "-q", "-m", "updated")
     older = kit_py(project, "update", "--to", "v0.1.0", "--no-sync")
-    assert older.returncode == 2 and "older than" in older.stdout
+    assert older.returncode == 2 and ("behind" in older.stdout or "older than" in older.stdout)
     again = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
     assert again.returncode == 0 and "nothing to do" in again.stdout
 
@@ -845,16 +882,176 @@ def test_update_refuses_what_cannot_be_right(
 
 
 def test_status_names_the_versions_and_the_locally_changed_kit_files(
-    kit_repo: Path, tmp_path: Path
+    kit_repo: Path, tmp_path: Path, templates: Path
 ) -> None:
-    project = project_from(kit_repo, tmp_path / "project")
+    project = project_from(kit_repo, tmp_path / "project", templates)
     clean = kit_py(project, "status")
     assert clean.returncode == 0, clean.stdout + clean.stderr
-    assert "kit version: 0.1.0" in clean.stdout and "newest: v0.2.0" in clean.stdout
+    assert "kit version: 0.1.0" in clean.stdout and "newest: v0.3.0" in clean.stdout
     assert "as the kit rendered them" in clean.stdout
 
     makefile = project / "Makefile"
     makefile.write_text(makefile.read_text("utf-8") + "\n# ours\n", "utf-8")
     changed = kit_py(project, "status")  # a dirty tree is what status is for: no clean-tree check
     assert changed.returncode == 0, changed.stdout + changed.stderr
-    assert "Makefile" in changed.stdout and "differ from the kit" in changed.stdout
+    assert "differ from the kit" in changed.stdout
+    listed = [line.strip() for line in changed.stdout.splitlines() if line.startswith("  ")]
+    assert listed == ["Makefile"]
+
+
+# ---------------------------------------------------------------------------- update, round 2
+
+
+def test_update_takes_the_newer_kit_py_first_and_its_manifest_decides(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    """v0.3.0 adds a kit-owned pattern (`extras/*`) in its own kit.py and a file under it. The
+    project's kit.py knows nothing of it; the update takes the newer kit.py and re-runs with it, so
+    the file arrives in the same run (round 1 of the review: the first run skipped it, and the
+    second said "nothing to do")."""
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    result = kit_py(project, "update", "--to", "v0.3.0", "--no-sync")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "took the newer kit.py first" in result.stdout
+    assert "unknown to this kit.py" not in result.stdout
+    assert (project / "extras/tool.txt").read_text("utf-8") == "a kit-owned extra for demo\n"
+    assert kit.read_lock(project).version == "0.3.0"
+    assert "0.3.0" in (project / "kit.py").read_text("utf-8")
+    git(project, "commit", "-q", "-m", "updated")
+    again = kit_py(project, "update", "--to", "v0.3.0", "--no-sync")
+    assert again.returncode == 0 and "nothing to do" in again.stdout
+
+
+def test_an_added_file_keeps_its_mode(kit_repo: Path, tmp_path: Path, templates: Path) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    assert kit_py(project, "update", "--to", "v0.3.0", "--no-sync").returncode == 0
+    assert os.access(project / "scripts/run.sh", os.X_OK)
+    assert "echo demo" in (project / "scripts/run.sh").read_text("utf-8")
+
+
+def test_update_refuses_to_go_backwards_in_the_history(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    """The newest tag is behind a commit the project already has: the default target must not
+    undo it, and `--to` an ancestor is refused — order is the commits', not the version string's."""
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    assert kit_py(project, "update", "--to", "main", "--no-sync").returncode == 0  # after v0.3.0
+    git(project, "commit", "-q", "-m", "at the tip")
+    assert "# after v0.3.0" in (project / "scripts/fmt_hook.py").read_text("utf-8")
+    default = kit_py(project, "update", "--no-sync")  # the newest tag, v0.3.0: an ancestor
+    assert default.returncode == 2 and "behind what this project has" in default.stdout
+    assert "# after v0.3.0" in (project / "scripts/fmt_hook.py").read_text("utf-8")
+    assert git(project, "status", "--porcelain") == ""
+
+
+def test_update_reaches_a_branch_by_its_name(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    result = kit_py(project, "update", "--to", "feature", "--no-sync")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (project / "docs/kit/FEATURE.md").is_file()
+
+
+def test_a_conflict_in_pyproject_leaves_a_sentence_not_a_traceback(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    pyproject = project / "pyproject.toml"
+    old = 'select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]'
+    pyproject.write_text(pyproject.read_text("utf-8").replace(old, old[:-1] + ', "PL"]'), "utf-8")
+    git(project, "commit", "-q", "-am", "our own lint rule")
+    conflict = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert conflict.returncode == 1 and "pyproject.toml" in conflict.stdout
+    status = kit_py(project, "status")
+    assert status.returncode == 2, status.stdout + status.stderr
+    assert "Traceback" not in status.stderr and "conflict markers" in status.stdout
+    git(project, "commit", "-q", "-am", "with the markers")
+    again = kit_py(project, "update", "--to", "v0.3.0", "--no-sync")
+    assert again.returncode == 2 and "Traceback" not in again.stderr
+
+
+def test_status_says_when_the_kit_it_took_cannot_be_reconstructed(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    lock = kit.read_lock(project)
+    kit.write_lock(project, lock.answers, "0.9.9", repo=lock.repo)  # no such tag, no commit
+    git(project, "commit", "-q", "-am", "a lock the kit has no tag for")
+    result = kit_py(project, "status")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "kit version: 0.9.9" in result.stdout and "cannot be reconstructed" in result.stdout
+    with_from = kit_py(project, "status", "--from", "v0.1.0")
+    assert with_from.returncode == 0 and "as the kit rendered them" in with_from.stdout
+
+
+def test_a_relative_repo_is_read_from_where_the_user_stands(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    relative = os.path.relpath(kit_repo, project)
+    result = kit_py(project, "update", "--repo", relative, "--to", "v0.2.0", "--no-sync")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert kit.read_lock(project).repo == str(kit_repo.resolve())  # recorded absolute
+
+
+def test_a_directory_where_the_kit_adds_a_file_is_not_added(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    (project / "extras/tool.txt").mkdir(parents=True)
+    (project / "extras/tool.txt/ours.txt").write_text("ours\n", "utf-8")
+    git(project, "add", "-A")
+    git(project, "commit", "-q", "-m", "a folder of our own")
+    result = kit_py(project, "update", "--to", "v0.3.0", "--no-sync")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Traceback" not in result.stderr
+    assert "not added" in result.stdout and "extras/tool.txt" in result.stdout
+    assert (project / "extras/tool.txt/ours.txt").is_file()
+
+
+def test_a_merge_git_cannot_do_is_a_sentence_and_names_the_way_back(tmp_path: Path) -> None:
+    base, theirs, project = tmp_path / "base", tmp_path / "theirs", tmp_path / "project"
+    for root, content in ((base, b"a\x00b"), (theirs, b"a\x00c"), (project, b"a\x00d")):
+        root.mkdir()
+        (root / "x.dat").write_bytes(content)
+    with pytest.raises(kit.Refused, match=r"could not merge x\.dat.*half updated"):
+        kit.apply_update(kit.UpdatePlan(merge=["x.dat"]), base, theirs, project, "0.1.0", "0.2.0")
+
+
+def test_files_under_ignores_only_the_trees_own_git(tmp_path: Path) -> None:
+    root = tmp_path / ".git" / "tmp" / "tree"
+    root.mkdir(parents=True)
+    (root / "a.txt").write_text("a\n", "utf-8")
+    (root / ".git").mkdir()
+    (root / ".git" / "config").write_text("x\n", "utf-8")
+    assert kit.files_under(root) == ["a.txt"]
+
+
+def test_python_version_problem_is_a_sentence_below_the_minimum() -> None:
+    assert kit.python_version_problem(3, 10) is not None
+    assert "3.11" in (kit.python_version_problem(3, 9) or "")
+    assert kit.python_version_problem(3, 11) is None
+    assert kit.python_version_problem(3, 13) is None
+
+
+def test_kit_py_imports_the_standard_library_only() -> None:
+    import ast
+
+    tree = ast.parse((ROOT / "kit.py").read_text("utf-8"))
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".")[0])
+    assert imported, "no imports found"
+    assert imported <= set(sys.stdlib_module_names) | {"__future__"}, imported - set(
+        sys.stdlib_module_names
+    )
+
+
+def testwithout_option_drops_the_flag_in_both_spellings() -> None:
+    argv = ["--to", "v0.2.0", "--repo", "../kit", "--no-sync", "--repo=../other"]
+    assert kit.without_option(argv, "--repo") == ["--to", "v0.2.0", "--no-sync"]
+    assert kit.without_option(["--repo"], "--repo") == []

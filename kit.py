@@ -32,16 +32,17 @@ import fnmatch
 import io
 import json
 import keyword
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
-import tomllib
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, fields
 from pathlib import Path
+from typing import Any
 
 KIT_VERSION = "0.1.0"
 KIT_REPO = "https://github.com/Dana-Afazeli/agentic-swe-kit"
@@ -358,6 +359,25 @@ def render_path(path: str, answers: Answers) -> str:
 # ----------------------------------------------------------------------------- the lock
 
 
+MIN_PYTHON = (3, 11)  # tomllib (the lock), sys.stdlib_module_names (validation)
+
+
+def python_version_problem(major: int, minor: int) -> str | None:
+    if (major, minor) < MIN_PYTHON:
+        return (
+            f"kit.py needs Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]} or later; this is "
+            f"{major}.{minor}. `uv python install` gives the project's own, or run "
+            "`uv run python kit.py …` once the environment exists"
+        )
+    return None
+
+
+def toml_loads(text: str) -> dict[str, Any]:
+    import tomllib  # 3.11+: imported here so that main() can say so first
+
+    return tomllib.loads(text)
+
+
 def toml_string(value: str) -> str:
     """A TOML basic string. JSON's escapes are TOML's, except that JSON writes a character outside
     the BMP as a surrogate pair, which TOML refuses: `ensure_ascii=False` writes the character."""
@@ -403,7 +423,7 @@ def write_lock(
 
 
 def read_lock(root: Path) -> Lock:
-    data = tomllib.loads((root / LOCK).read_text("utf-8"))
+    data = toml_loads((root / LOCK).read_text("utf-8"))
     answers = Answers(**{f.name: str(data["answers"][f.name]) for f in fields(Answers)})
     return Lock(
         version=str(data["kit"]["version"]),
@@ -429,6 +449,22 @@ def run(args: list[str], cwd: Path, check: bool = True) -> subprocess.CompletedP
         return subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=check)
     except FileNotFoundError as error:
         raise Missing(args[0]) from error
+
+
+def run_steps(commands: Iterable[list[str]], cwd: Path) -> bool:
+    """Run the commands in order for the user to see; stop at the first that does not succeed."""
+    for command in commands:
+        if not step(command, cwd):
+            say(f"{' '.join(command)} did not succeed: fix it, then `make check` again")
+            return False
+    return True
+
+
+def print_next_steps(maintainer: str, steps: list[str]) -> None:
+    print()
+    print(f"Next steps for {maintainer}:")
+    for number, text in enumerate(steps, 1):
+        print(f"  {number}. {text}")
 
 
 def step(command: list[str], cwd: Path) -> bool:
@@ -480,6 +516,7 @@ def render_tree(src: Path, dst: Path, answers: Answers, paths: Iterable[str]) ->
         out = dst / target
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(render_text(source, text, answers), "utf-8")
+        shutil.copymode(src / source, out)
         written.append(target)
     if in_place:
         seeded = set(SEEDS.values())  # README.md and the docs a seed has just replaced stay
@@ -548,11 +585,8 @@ def init(args: argparse.Namespace) -> int:
             ["uv", "run", "ruff", "format", *owned_python],
             ["make", "check"],
         )
-        for command in commands:
-            if not step(command, root):
-                say(f"{' '.join(command)} did not succeed: fix it, then `make check` again")
-                status = 1
-                break
+        if not run_steps(commands, root):
+            status = 1
     if args.labels:
         status = max(status, create_labels(root))
     if args.hooks and not step(["uv", "run", "prek", "install"], root):
@@ -573,10 +607,7 @@ def init(args: argparse.Namespace) -> int:
     if "\nprove:" in (root / "Makefile").read_text("utf-8"):
         steps.append("`make prove` — every gate shown red on a planted defect, on this machine.")
     steps.append("Read docs/kit/SETUP.md; write the first brief from docs/briefs/000-TEMPLATE.md.")
-    print()
-    print(f"Next steps for {answers.maintainer}:")
-    for number, text in enumerate(steps, 1):
-        print(f"  {number}. {text}")
+    print_next_steps(answers.maintainer, steps)
     return status
 
 
@@ -637,10 +668,15 @@ def labels_command(_args: argparse.Namespace) -> int:
 # ----------------------------------------------------------------------------- update
 
 VERSION_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+HANDOVER_VARIABLE = "KIT_UPDATE_HANDOVER"  # set once `update` has taken the newer kit.py and re-run
+HALF_UPDATED = (
+    "the tree is half updated; it was clean before: `git checkout -- . && git clean -fd` "
+    "takes it back, then run update again"
+)
 
 
 class Refused(Exception):
-    """A call that cannot be right; the message says why. Nothing was changed."""
+    """A call that cannot be right; the message says why."""
 
 
 def version_key(version: str) -> tuple[int, int, int] | None:
@@ -649,10 +685,15 @@ def version_key(version: str) -> tuple[int, int, int] | None:
     return (int(match[1]), int(match[2]), int(match[3])) if match else None
 
 
-def fetch_kit(repo: str, into: Path) -> None:
-    result = run(["git", "clone", "--quiet", repo, str(into)], into.parent, check=False)
+def fetch_kit(repo: str, into: Path, cwd: Path) -> str:
+    """Clone the kit into `into`; a relative local path is read from `cwd` (where the user stands),
+    and the repository is returned as recorded in the lock: absolute when it is a local path."""
+    local = (cwd / repo).resolve()
+    source = str(local) if local.exists() else repo
+    result = run(["git", "clone", "--quiet", source, str(into)], cwd, check=False)
     if result.returncode != 0:
         raise Refused(f"the kit could not be fetched from {repo}: {result.stderr.strip()}")
+    return source
 
 
 def kit_versions(clone: Path) -> list[str]:
@@ -664,13 +705,23 @@ def kit_versions(clone: Path) -> list[str]:
 
 
 def resolve(clone: Path, ref: str) -> str:
-    """The commit `ref` names in the kit, or Refused."""
-    result = run(
-        ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], clone, check=False
-    )
-    if result.returncode != 0:
-        raise Refused(f"the kit has no ref {ref!r} (a tag such as v0.2.0, a branch, or a commit)")
-    return result.stdout.strip()
+    """The commit `ref` names in the kit, or Refused. A fresh clone has a local branch for the
+    remote's HEAD only, so a branch name is tried as `origin/<ref>` too."""
+    for candidate in (ref, f"origin/{ref}"):
+        result = run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+            clone,
+            check=False,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    raise Refused(f"the kit has no ref {ref!r} (a tag such as v0.2.0, a branch, or a commit)")
+
+
+def is_behind(clone: Path, target: str, base: str) -> bool:
+    """Whether `target` is an ancestor of `base`: moving there would go backwards in the history."""
+    result = run(["git", "merge-base", "--is-ancestor", target, base], clone, check=False)
+    return result.returncode == 0 and target != base
 
 
 def export(clone: Path, ref: str, into: Path) -> None:
@@ -684,9 +735,12 @@ def export(clone: Path, ref: str, into: Path) -> None:
 
 
 def files_under(root: Path) -> list[str]:
-    """Every file under `root`, repository-relative, sorted (an export has no git to ask)."""
+    """Every file under `root`, repository-relative, sorted (an export has no git to ask). A `.git`
+    of the tree itself is left out, not a `.git` somewhere above it."""
     return sorted(
-        str(p.relative_to(root)) for p in root.rglob("*") if p.is_file() and ".git" not in p.parts
+        str(p.relative_to(root))
+        for p in root.rglob("*")
+        if p.is_file() and ".git" not in p.relative_to(root).parts
     )
 
 
@@ -738,6 +792,7 @@ def plan_update(base: Path, theirs: Path, project: Path) -> UpdatePlan:
     for path in managed:
         in_base, in_theirs = (base / path).is_file(), (theirs / path).is_file()
         in_project = (project / path).is_file()
+        occupied = os.path.lexists(project / path)  # a directory or a link where a file would go
         if in_base and in_theirs:
             if not in_project:
                 plan.missing.append(path)
@@ -746,16 +801,17 @@ def plan_update(base: Path, theirs: Path, project: Path) -> UpdatePlan:
             else:
                 plan.merge.append(path)
         elif in_theirs:
-            if not in_project:
+            if not occupied:
                 plan.add.append(path)
-            elif _same(theirs / path, project / path):
+            elif in_project and _same(theirs / path, project / path):
                 plan.unchanged.append(path)
             else:
                 plan.blocked_add.append(path)
         elif in_project:
-            (plan.remove_clean if _same(base / path, project / path) else plan.remove_kept).append(
-                path
-            )
+            if _same(base / path, project / path):
+                plan.remove_clean.append(path)
+            else:
+                plan.remove_kept.append(path)
         else:
             plan.unchanged.append(path)
     return plan
@@ -773,33 +829,39 @@ def apply_update(
     plan: UpdatePlan, base: Path, theirs: Path, project: Path, old: str, new: str
 ) -> UpdateResult:
     """Write what the plan says. A merge with conflicts leaves the markers in the file and counts
-    it under `conflicts`; `git merge-file` exits with the number of conflicts, which is not an
-    error."""
+    it under `conflicts`: `git merge-file` exits with the number of conflicts (at most 127), which
+    is not an error; its errors come back as 255 (a negative status) and stop the update."""
     result = UpdateResult()
-    for path in plan.merge:
-        merged = subprocess.run(
-            [
-                "git",
-                "merge-file",
-                *("-L", "yours", "-L", f"kit {old}", "-L", f"kit {new}"),
-                str(project / path),
-                str(base / path),
-                str(theirs / path),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if merged.returncode < 0:
-            raise Refused(f"git merge-file failed on {path}: {merged.stderr.strip()}")
-        (result.conflicts if merged.returncode else result.merged).append(path)
-    for path in plan.add:
-        (project / path).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(theirs / path, project / path)
-        result.added.append(path)
-    for path in plan.remove_clean:
-        (project / path).unlink()
-        result.removed.append(path)
+    try:
+        for path in plan.merge:
+            merged = subprocess.run(
+                [
+                    "git",
+                    "merge-file",
+                    *("-L", "yours", "-L", f"kit {old}", "-L", f"kit {new}"),
+                    str(project / path),
+                    str(base / path),
+                    str(theirs / path),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if merged.returncode < 0 or merged.returncode > 127:
+                raise Refused(
+                    f"git merge-file could not merge {path}: {merged.stderr.strip()}; "
+                    f"{HALF_UPDATED}"
+                )
+            (result.conflicts if merged.returncode else result.merged).append(path)
+        for path in plan.add:
+            (project / path).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(theirs / path, project / path)  # content and mode
+            result.added.append(path)
+        for path in plan.remove_clean:
+            (project / path).unlink()
+            result.removed.append(path)
+    except OSError as error:
+        raise Refused(f"{error}; {HALF_UPDATED}") from error
     return result
 
 
@@ -811,28 +873,34 @@ def _render_export(clone: Path, ref: str, answers: Answers, work: Path, name: st
     unknown = [p for p in paths if category(p) is None]
     if unknown:
         shown = ", ".join(unknown[:5]) + ("…" if len(unknown) > 5 else "")
-        say(
-            f"{len(unknown)} files of the kit at {ref} are unknown to this kit.py and were "
-            f"skipped; run update once more after it ({shown})"
-        )
+        say(f"{len(unknown)} files of the kit at {ref[:7]} are unknown to this kit.py: {shown}")
     render_tree(raw, rendered, answers, [p for p in paths if p not in unknown])
     return rendered
 
 
 def _project_checks(root: Path, require_clean: bool = True) -> Lock:
     if not (root / LOCK).is_file():
-        raise Refused(f"no {LOCK} here: update runs in a project made by `kit.py init`")
-    lock = read_lock(root)
-    if require_clean and run(["git", "status", "--porcelain"], root).stdout.strip():
+        raise Refused(f"no {LOCK} here: this is not a project made by `kit.py init`")
+    try:
+        lock = read_lock(root)
+        pyproject = toml_loads((root / "pyproject.toml").read_text("utf-8"))
+        name = pyproject["project"]["name"]
+    except (OSError, KeyError, ValueError) as error:  # tomllib's error is a ValueError
+        raise Refused(
+            f"{LOCK} or pyproject.toml cannot be read ({error}): unresolved conflict markers?"
+        ) from error
+    # the handed-over run (HANDOVER_VARIABLE) starts from a tree the first run found clean and
+    # then changed by one file, kit.py: that run does not ask again
+    handed_over = os.environ.get(HANDOVER_VARIABLE) == "1"
+    dirty = run(["git", "status", "--porcelain"], root).stdout.strip()
+    if require_clean and not handed_over and dirty:
         raise Refused(
             "the working tree is not clean: commit or stash first, so the update is the diff"
         )
-    pyproject = tomllib.loads((root / "pyproject.toml").read_text("utf-8"))
-    if pyproject["project"]["name"] != lock.answers.package:
+    if name != lock.answers.package:
         raise Refused(
-            f"{LOCK} says package {lock.answers.package!r}, pyproject.toml says "
-            f"{pyproject['project']['name']!r}: the lock was edited, or the project renamed; "
-            "fix the lock"
+            f"{LOCK} says package {lock.answers.package!r}, pyproject.toml says {name!r}: the "
+            "lock was edited, or the project renamed; fix the lock"
         )
     return lock
 
@@ -842,6 +910,47 @@ def _print_list(title: str, paths: list[str]) -> None:
         print(f"{title}:")
         for path in paths:
             print(f"  {path}")
+
+
+def without_option(argv: list[str], name: str) -> list[str]:
+    """`argv` without `name <value>` and `name=<value>`."""
+    kept: list[str] = []
+    skip = False
+    for arg in argv:
+        if skip:
+            skip = False
+        elif arg == name:
+            skip = True
+        elif not arg.startswith(name + "="):
+            kept.append(arg)
+    return kept
+
+
+def _hand_over(root: Path, theirs_raw: Path, argv: list[str], clone: Path, repo: str) -> int | None:
+    """Take the newer kit's `kit.py` (copied verbatim into every project) and run *its* `update`
+    with the same arguments, so the newer manifest and rules decide the rest. None when this file
+    already is that version, or when this is the second run. The clone is handed on too."""
+    if os.environ.get(HANDOVER_VARIABLE) == "1" or _same(theirs_raw / "kit.py", Path(__file__)):
+        return None
+    shutil.copy(theirs_raw / "kit.py", root / "kit.py")
+    say("took the newer kit.py first; running its update")
+    passed_on = without_option(argv, "--repo")  # the resolved one goes instead
+    done = subprocess.run(
+        [
+            sys.executable,
+            str(root / "kit.py"),
+            "update",
+            *passed_on,
+            "--repo",
+            repo,
+            "--clone",
+            str(clone),
+        ],
+        cwd=root,
+        env={**os.environ, HANDOVER_VARIABLE: "1"},
+        check=False,
+    )
+    return done.returncode
 
 
 def update(args: argparse.Namespace) -> int:
@@ -856,8 +965,11 @@ def update(args: argparse.Namespace) -> int:
             )
         with tempfile.TemporaryDirectory(prefix="kit-update-") as tmp:
             work = Path(tmp)
-            clone = work / "kit"
-            fetch_kit(args.repo or lock.repo, clone)
+            if args.clone and Path(args.clone).is_dir():  # the clone the first run made
+                clone, repo = Path(args.clone), args.repo or lock.repo
+            else:
+                clone = work / "kit"
+                repo = fetch_kit(args.repo or lock.repo, clone, root)
             versions = kit_versions(clone)
             target = args.to or (versions[-1] if versions else None)
             if target is None:
@@ -873,22 +985,32 @@ def update(args: argparse.Namespace) -> int:
             if base_sha == target_sha:
                 say(f"already at {target} ({target_sha[:7]}); nothing to do")
                 return 0
-            theirs_raw_version = None
-            theirs = _render_export(clone, target_sha, lock.answers, work, "theirs")
-            theirs_raw_version = kit_version_of(work / "theirs-raw")
-            old_key, new_key = version_key(lock.version), version_key(theirs_raw_version)
+            if is_behind(clone, target_sha, base_sha):
+                raise Refused(
+                    f"the kit at {target} ({target_sha[:7]}) is behind what this project has "
+                    f"({base_sha[:7]}); an update does not go backwards"
+                )
+            theirs_raw = work / "theirs-raw"
+            export(clone, target_sha, theirs_raw)
+            handed = _hand_over(root, theirs_raw, args.argv, clone, repo)
+            if handed is not None:
+                return handed
+            new_version = kit_version_of(theirs_raw)
+            old_key, new_key = version_key(lock.version), version_key(new_version)
             if old_key and new_key and new_key < old_key:
                 raise Refused(
-                    f"the kit at {target} is version {theirs_raw_version}, older than the "
+                    f"the kit at {target} is version {new_version}, older than the "
                     f"{lock.version} this project has"
                 )
+            theirs = work / "theirs"
+            render_tree(theirs_raw, theirs, lock.answers, files_under(theirs_raw))
             base = _render_export(clone, base_sha, lock.answers, work, "base")
             plan = plan_update(base, theirs, root)
-            result = apply_update(plan, base, theirs, root, lock.version, theirs_raw_version)
-            write_lock(root, lock.answers, theirs_raw_version, args.repo or lock.repo, target_sha)
-            changelog = work / "theirs-raw" / "CHANGELOG.md"
+            result = apply_update(plan, base, theirs, root, lock.version, new_version)
+            write_lock(root, lock.answers, new_version, repo, target_sha)
+            changelog = theirs_raw / "CHANGELOG.md"
             notes = (
-                changelog_between(changelog.read_text("utf-8"), lock.version, theirs_raw_version)
+                changelog_between(changelog.read_text("utf-8"), lock.version, new_version)
                 if changelog.is_file()
                 else ""
             )
@@ -900,11 +1022,11 @@ def update(args: argparse.Namespace) -> int:
         return 2
 
     run(["git", "add", "-A"], root)
+    came_from = (lock.commit or "v" + lock.version)[:12]
     say(
-        f"updated from {lock.version} ({(lock.commit or 'v' + lock.version)[:12]}) to "
-        f"{theirs_raw_version} ({target_sha[:7]}): {len(result.merged)} merged, "
-        f"{len(result.conflicts)} with conflicts, {len(result.added)} added, "
-        f"{len(result.removed)} removed"
+        f"updated from {lock.version} ({came_from}) to {new_version} ({target_sha[:7]}): "
+        f"{len(result.merged)} merged, {len(result.conflicts)} with conflicts, "
+        f"{len(result.added)} added, {len(result.removed)} removed"
     )
     _print_list("conflicts — resolve the markers, then `make check`", result.conflicts)
     _print_list(
@@ -918,12 +1040,10 @@ def update(args: argparse.Namespace) -> int:
         print()
 
     status = 1 if result.conflicts else 0
-    if not args.no_sync:
-        for command in (["uv", "lock"], ["uv", "sync", "--all-groups"], ["make", "check"]):
-            if not step(command, root):
-                say(f"{' '.join(command)} did not succeed: fix it, then `make check` again")
-                status = 1
-                break
+    if not args.no_sync and not run_steps(
+        (["uv", "lock"], ["uv", "sync", "--all-groups"], ["make", "check"]), root
+    ):
+        status = 1
     run(["git", "add", "-A"], root)
     steps: list[str] = []
     if result.conflicts:
@@ -932,36 +1052,35 @@ def update(args: argparse.Namespace) -> int:
         "Read the diff (`git diff --cached`), commit, push; `make prove` if the project has it."
     )
     steps.append("Open the PR: it touches gate files, so `gate-guard` waits for `gates-approved`.")
-    print()
-    print(f"Next steps for {lock.answers.maintainer}:")
-    for number, text in enumerate(steps, 1):
-        print(f"  {number}. {text}")
+    print_next_steps(lock.answers.maintainer, steps)
     return status
 
 
 def status_command(args: argparse.Namespace) -> int:
     root = Path.cwd()
     try:
-        if not (root / LOCK).is_file():
-            raise Refused(f"no {LOCK} here: this is not a project made by `kit.py init`")
         lock = _project_checks(root, require_clean=False)  # a dirty tree is what status is for
         with tempfile.TemporaryDirectory(prefix="kit-status-") as tmp:
             work = Path(tmp)
             clone = work / "kit"
-            fetch_kit(args.repo or lock.repo, clone)
+            fetch_kit(args.repo or lock.repo, clone, root)
             versions = kit_versions(clone)
             newest = versions[-1] if versions else "(no release tag)"
-            base_ref = lock.commit or f"v{lock.version}"
+            base_ref = args.from_ref or lock.commit or f"v{lock.version}"
             print(f"kit version: {lock.version} ({base_ref[:12]}); newest: {newest}")
-            base = _render_export(clone, resolve(clone, base_ref), lock.answers, work, "base")
+            try:
+                base_sha = resolve(clone, base_ref)
+            except Refused:
+                print(
+                    f"the kit this project took cannot be reconstructed: no ref {base_ref!r} in "
+                    "the kit (a project made before the kit's first release); pass --from <ref>"
+                )
+                return 0
+            base = _render_export(clone, base_sha, lock.answers, work, "base")
             changed = [
                 p
                 for p in files_under(base)
-                if is_managed(p)
-                and (
-                    ((root / p).is_file() and not _same(base / p, root / p))
-                    or not (root / p).is_file()
-                )
+                if is_managed(p) and (not (root / p).is_file() or not _same(base / p, root / p))
             ]
             _print_list("kit-owned files that differ from the kit you took", changed)
             if not changed:
@@ -1044,18 +1163,31 @@ def parser() -> argparse.ArgumentParser:
     p_update.add_argument(
         "--no-sync", action="store_true", help="skip uv lock, uv sync and make check"
     )
+    p_update.add_argument("--clone", default=None, help=argparse.SUPPRESS)  # the hand-over's
     p_update.set_defaults(func=update)
 
     p_status = sub.add_parser(
         "status", help="the kit version here, the newest, and what you changed"
     )
     p_status.add_argument("--repo", default=None, help="the kit repository (default: the lock)")
+    p_status.add_argument(
+        "--from",
+        dest="from_ref",
+        default=None,
+        help="the kit ref this project was rendered from (default: the lock)",
+    )
     p_status.set_defaults(func=status_command)
     return top
 
 
 def main(argv: list[str] | None = None) -> int:
+    problem = python_version_problem(sys.version_info.major, sys.version_info.minor)
+    if problem:
+        say(problem)
+        return 2
+    argv = list(sys.argv[1:] if argv is None else argv)
     args = parser().parse_args(argv)
+    args.argv = argv[1:]  # the subcommand's own arguments, for update's hand-over
     func: Callable[[argparse.Namespace], int] = args.func
     try:
         return func(args)
