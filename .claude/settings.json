@@ -1,0 +1,112 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(uv run:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv add:*)",
+      "Bash(uv lock:*)",
+      "Bash(uv python:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch --show-current)",
+      "Bash(git fetch:*)",
+      "Bash(git pull)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git switch main-:*)",
+      "Bash(git switch -c main-:*)",
+      "Bash(git push -u origin main-:*)",
+      "Bash(git push origin main-:*)",
+      "Bash(gh pr create --base main:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr ready:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh run view:*)"
+    ],
+    "ask": [
+      "Bash(gh pr merge:*)",
+      "Edit(/.claude/**)",
+      "Edit(/.github/**)",
+      "Edit(/scripts/**)",
+      "Edit(/kit.py)",
+      "Edit(/Makefile)",
+      "Edit(/pyproject.toml)",
+      "Edit(/uv.lock)",
+      "Edit(/.pre-commit-config.yaml)",
+      "Edit(/.python-version)",
+      "Edit(/.gitignore)",
+      "Edit(/.betterleaks.toml)",
+      "Edit(/.betterleaksignore)",
+      "Edit(/GNUmakefile)",
+      "Edit(/makefile)",
+      "Edit(/pytest.toml)",
+      "Edit(/.pytest.toml)",
+      "Edit(/pytest.ini)",
+      "Edit(/.pytest.ini)",
+      "Edit(/ruff.toml)",
+      "Edit(/.ruff.toml)",
+      "Edit(/pyrightconfig.json)",
+      "Edit(/.coveragerc)",
+      "Edit(/.coveragerc.toml)",
+      "Edit(/.importlinter)",
+      "Edit(/setup.cfg)",
+      "Edit(/tox.ini)",
+      "Edit(/uv.toml)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push origin main)",
+      "Bash(git push -u origin main)",
+      "Bash(git push origin HEAD:main)",
+      "Bash(git reset --hard:*)",
+      "Bash(rm -rf ~:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(gh label:*)",
+      "Bash(gh pr edit --add-label:*)",
+      "Bash(gh pr edit --remove-label:*)"
+    ]
+  },
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-5-5"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$CLAUDE_PROJECT_DIR\" python \"$CLAUDE_PROJECT_DIR/scripts/guard_bash.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$CLAUDE_PROJECT_DIR\" python \"$CLAUDE_PROJECT_DIR/scripts/fmt_hook.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$CLAUDE_PROJECT_DIR\" python \"$CLAUDE_PROJECT_DIR/scripts/stop_gate.py\"",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+# Git hooks, run by prek (`uv run prek install`, in the development checkout only).
+# ruff and `make check` run through uv, so hooks use the exact versions in uv.lock — the same
+# ones `make check` and CI use. Hooks check; they never rewrite files (`make fmt` does that).
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format --check (staged Python)
+        entry: uv run ruff format --check
+        language: system
+        types: [python]
+      - id: ruff-check
+        name: ruff check (staged Python)
+        entry: uv run ruff check
+        language: system
+        types: [python]
+
+  - repo: https://github.com/betterleaks/betterleaks
+    rev: v1.9.0
+    hooks:
+      - id: betterleaks
+
+  - repo: local
+    hooks:
+      - id: make-check
+        name: make check (the gate)
+        entry: make check
+        language: system
+        pass_filenames: false
+        always_run: true

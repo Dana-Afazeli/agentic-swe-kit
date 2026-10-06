@@ -1,0 +1,223 @@
+# CI runs the same commands as a developer machine (`make install`, `make check`, `make mutate`);
+# if CI and local can disagree, the gate is worthless (docs/kit/HARNESS.md, "CI").
+name: ci
+
+on:
+  pull_request:
+    branches: [main] # knob: base
+    # labeled/unlabeled so gate-guard re-evaluates when `gates-approved` is added or removed
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches: [main] # knob: base
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+# Concurrency is set per job, not for the workflow. A newer run cancels the older run's check,
+# mutation, secrets and integrity jobs — but never gate-guard: a cancelled gate-guard would skip
+# the expiry of `gates-approved` for the push it was started for, and the next run would look
+# only at its own push (PR #5 review).
+
+env:
+  # What this run is compared against: the PR's base branch, or the previous tip on a push.
+  BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: ci-check-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # diff-cover needs the base commit
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.11.x"
+      - run: uv python install # reads .python-version
+      - run: make install
+      - run: make check
+      - name: diff coverage (changed lines >= 95 %, branches included)
+        # $BASE, not origin/main: on a push to main the two are the same commit and the diff is empty.
+        run: uv run diff-cover coverage.xml --compare-branch="$BASE" --fail-under=95 --branch-coverage
+
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: ci-mutation-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.11.x"
+      - run: uv python install
+      - run: make install
+      - name: mutate the changed core modules
+        run: |
+          # On its own line so a failing `git diff` (BASE missing from the clone) stops the job
+          # instead of looking like "nothing changed".
+          # core.quotePath=false: a path with a non-ASCII character is printed as it is, not quoted.
+          changed=$(git -c core.quotePath=false diff --name-only --no-renames --diff-filter=d "$BASE...HEAD" -- src/kitpkg/core) # knob: package
+          # Changed (not deleted) Python files under core/ that define a function: mutmut 3
+          # mutates function bodies only and aborts when a filter matches no mutant.
+          files=$(echo "$changed" | grep '\.py$' | xargs -r grep -lE '^[[:space:]]*(async[[:space:]]+)?def ' || true)
+          if [ -z "$files" ]; then
+            echo "mutation: no changed module under src/kitpkg/core defines a function — skipped"
+            exit 0
+          fi
+          # src/kitpkg/core/text.py -> kitpkg.core.text.* ; a package __init__ -> its package
+          patterns=$(echo "$files" | sed -e 's|^src/||' -e 's|\.py$||' -e 's|/__init__$||' -e 's|/|.|g' -e 's|$|.*|' | tr '\n' ' ')
+          echo "mutation: $patterns"
+          make mutate MUTANTS="$patterns"
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: ci-secrets-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      # Keep in step with `rev` in .pre-commit-config.yaml. betterleaks publishes no GitHub Action,
+      # so the pinned release binary is downloaded and its checksum verified.
+      BETTERLEAKS_VERSION: "1.9.0"
+      BETTERLEAKS_SHA256: f8b185a39ffcece2a1ca82bf3a4e7435cd81963ffd16b7a9128daf75f35f6de7 # linux_x64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: install betterleaks (pinned, checksum verified)
+        run: |
+          archive="$RUNNER_TEMP/betterleaks.tar.gz"
+          curl -fsSL -o "$archive" "https://github.com/betterleaks/betterleaks/releases/download/v${BETTERLEAKS_VERSION}/betterleaks_${BETTERLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${BETTERLEAKS_SHA256}  ${archive}" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/bin" betterleaks
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: scan the commits of this PR / push
+        run: betterleaks git . --redact --verbose --no-banner --log-opts="$BASE..HEAD"
+
+  integrity:
+    # No test vanishes, no skip is added, no check is switched off inline — unless the maintainer adds the
+    # label `checks-weakened-approved` (ADR-0008). The Stop hook runs the same script locally.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: ci-integrity-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the script compares with the commit where the branch left the base
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.11.x"
+      - run: uv python install
+      - run: make install
+      - name: weakened checks need the label checks-weakened-approved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Exit 0: nothing listed. 1: findings, the label decides. Anything else: no comparison.
+          status=0
+          uv run python scripts/integrity.py --base "$BASE" || status=$?
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          if [ "$status" -ne 1 ]; then
+            echo "::error::integrity could not compare this PR with $BASE (exit $status); no label covers that"
+            exit 1
+          fi
+          # On its own line so a failing `gh api` stops the job instead of reading as "no label".
+          labels=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels" --jq '.[].name')
+          if echo "$labels" | grep -qxF 'checks-weakened-approved'; then
+            echo "integrity: label checks-weakened-approved is present (the maintainer approved what is listed above)"
+            exit 0
+          fi
+          echo "::error::a check was weakened (listed above) and the PR lacks the label checks-weakened-approved (the maintainer adds it after reading)"
+          exit 1
+
+  gate-guard:
+    # The agent never polices its own gates: a PR that touches gate configuration stays red
+    # until the maintainer adds the label `gates-approved`. The approval covers what the maintainer read: a push that
+    # touches a gate file removes the label, and the maintainer re-reads and re-labels.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: write # removes the label; nothing else in this workflow writes
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: gate files need the label gates-approved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_ACTION: ${{ github.event.action }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+          # Keep in step with GATE_FILES and GATE_DIRS in scripts/guard_bash.py.
+          # From GNUmakefile to uv.toml: a tool's own config file, which that tool reads before
+          # pyproject.toml or the Makefile (CONFIG_OVERRIDES there).
+          GATE_FILES: '^(Makefile$|pyproject\.toml$|uv\.lock$|\.pre-commit-config\.yaml$|\.python-version$|\.gitignore$|\.betterleaks\.toml$|\.betterleaksignore$|kit\.py$|GNUmakefile$|makefile$|pytest\.toml$|\.pytest\.toml$|pytest\.ini$|\.pytest\.ini$|ruff\.toml$|\.ruff\.toml$|pyrightconfig\.json$|\.coveragerc$|\.coveragerc\.toml$|\.importlinter$|setup\.cfg$|tox\.ini$|uv\.toml$|\.claude/|\.github/|scripts/)'
+        run: |
+          labels_url="repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels"
+
+          # The gate files this PR changes against its base. On its own line so a failing
+          # `git diff` stops the job instead of reading as "no gate files".
+          # core.quotePath=false: git would put a path with a non-ASCII character in quotes, and
+          # a line that starts with `"` matches no `^(…)`. A `"` or a `\` in a name still brings
+          # the quotes; they are taken off, here and below, so every line starts with its path.
+          changed=$(git -c core.quotePath=false diff --name-only --no-renames "$BASE...HEAD")
+          changed=${changed//\"/}
+          touched=$(echo "$changed" | grep -E "$GATE_FILES" || true)
+
+          # Expiry. Only on a push to the PR (`synchronize`), never on `labeled`. The push counts
+          # when it touched a gate file that is part of this PR's own change: a merge of the base
+          # branch brings in gate files that were read in their own PR. A previous tip that
+          # cannot be read — no `before`, or a force-push that orphaned it — counts as such a
+          # push: fail closed.
+          if [ "$EVENT_ACTION" = "synchronize" ]; then
+            if [ -n "$BEFORE" ] && pushed=$(git -c core.quotePath=false diff --name-only --no-renames "$BEFORE..$AFTER"); then
+              pushed=${pushed//\"/}
+              pushed_gates=$(echo "$pushed" | grep -Fx -f <(echo "$touched") || true)
+            else
+              pushed_gates="(the previous tip '$BEFORE' cannot be read, so this push counts as a gate change)"
+            fi
+            if [ -n "$pushed_gates" ]; then
+              echo "gate-guard: this push touched gate files, so an earlier gates-approved no longer covers the PR:"
+              echo "$pushed_gates" | sed 's/^/  /'
+              # On its own line so a failing `gh api` stops the job instead of reading as "no label".
+              labels=$(gh api "$labels_url" --jq '.[].name')
+              if echo "$labels" | grep -qxF 'gates-approved'; then
+                gh api -X DELETE "$labels_url/gates-approved" > /dev/null
+                echo "gate-guard: removed the label gates-approved (the maintainer re-reads the diff and adds it again)"
+              fi
+            fi
+          fi
+
+          if [ -z "$touched" ]; then
+            echo "gate-guard: no gate files touched"
+            exit 0
+          fi
+          echo "gate-guard: this PR touches gate files:"
+          echo "$touched" | sed 's/^/  /'
+          # Labels are read live, so re-running the job after labelling also works.
+          if gh api "$labels_url" --jq '.[].name' | grep -qxF 'gates-approved'; then
+            echo "gate-guard: label gates-approved is present"
+            exit 0
+          fi
+          echo "::error::gate files changed and the PR lacks the label gates-approved (the maintainer adds it after reading the diff)"
+          exit 1

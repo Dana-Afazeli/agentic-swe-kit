@@ -1,0 +1,101 @@
+[project]
+name = "kitpkg" # knob: package
+dynamic = ["version"]
+description = "A project built on agentic-swe-kit" # free text: say what the project is
+readme = "README.md"
+requires-python = ">=3.13,<3.14" # knob: python
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/kitpkg/__init__.py" # knob: package
+
+# The version is read from __init__.py at build time, so that file is a build input: without
+# this, uv keeps the installed metadata of the old version after a bump.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/kitpkg/__init__.py" }] # knob: package
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kitpkg"] # knob: package
+
+# The dev tools. Versions are pinned by uv.lock; `make install` refuses a stale lock.
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "coverage>=7.16.2",
+    "hypothesis",
+    "ruff",
+    "basedpyright",
+    "import-linter",
+    "mutmut",
+    "diff-cover",
+    "prek",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+# ruff >= 0.16 formats Markdown (and the Python blocks inside it). This gate is for Python
+# source; prose docs must not be able to turn `make lint` red.
+[tool.ruff.format]
+exclude = ["*.md"]
+
+# scripts/ holds the hooks and gate scripts, so it is checked like everything else. extraPaths
+# lets the tests import them; setting it replaces the default (`src`), so `src` is listed too.
+[tool.basedpyright]
+include = ["src", "tests", "scripts"]
+extraPaths = ["src", "scripts"]
+typeCheckingMode = "strict"
+pythonVersion = "3.13" # knob: python
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["scripts"]
+addopts = "--strict-markers"
+asyncio_mode = "auto"
+markers = [
+    "live: talks to a real external service; never part of `make check`",
+    "eval: model-graded evaluation that costs money; run only through `make eval`",
+    "prove: plants a defect in a throwaway clone and shows its gate go red; run only through `make prove`",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["kitpkg"] # knob: package
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+
+# The one architecture contract the kit ships (docs/kit/HARNESS.md, "Architecture contract"):
+# `core` holds the decisions and stays pure; `io` and `main` hold the boundaries. Add the I/O
+# packages your project uses to `forbidden_modules` (httpx, sqlalchemy, …) and add contracts as
+# the architecture grows; `make arch` enforces whatever is here.
+[tool.importlinter]
+root_package = "kitpkg" # knob: package
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Core is pure"
+type = "forbidden"
+source_modules = ["kitpkg.core"] # knob: package
+forbidden_modules = ["kitpkg.io", "kitpkg.main"] # knob: package
+
+# mutmut 3.8 names: `source_paths` (was `paths_to_mutate`), `pytest_add_cli_args_test_selection`
+# (was `tests_dir`). The marker expression keeps the live, eval and prove tests out of every mutant
+# run. setproctitle is not fork-safe on macOS; pinned off so the behaviour does not depend on the default.
+[tool.mutmut]
+source_paths = ["src/kitpkg"] # knob: package
+pytest_add_cli_args = ["-m", "not live and not eval and not prove"]
+pytest_add_cli_args_test_selection = ["tests/"]
+also_copy = ["scripts/", ".claude/"] # the harness tests import the gate scripts, which read .claude/
+use_setproctitle = false

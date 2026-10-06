@@ -1,0 +1,495 @@
+# Cases for tests/test_integrity.py: each diff is the input, `findings` the exact output.
+#
+# They live in a data file, not in the test module, because the test module is itself scanned by
+# the gate it tests: a skip marker or an escape-hatch comment written out in a `.py` file under
+# tests/ would be reported as a weakened check in every PR that touches that file.
+
+# ---------------------------------------------------------------- new_skips (criterion 7)
+
+[[new_skips]]
+name = "a skip marker added under tests/"
+diff = '''
+diff --git a/tests/a.py b/tests/a.py
+index 1111111..2222222 100644
+--- a/tests/a.py
++++ b/tests/a.py
+@@ -10,0 +11 @@ import pytest
++@pytest.mark.skip(reason="later")
+'''
+findings = ['tests/a.py:11: @pytest.mark.skip(reason="later")']
+
+[[new_skips]]
+name = "a skip marker removed"
+diff = '''
+diff --git a/tests/a.py b/tests/a.py
+--- a/tests/a.py
++++ b/tests/a.py
+@@ -11 +10,0 @@ import pytest
+-@pytest.mark.skip
+'''
+findings = []
+
+[[new_skips]]
+name = "a pytest.skip() call added inside a test"
+diff = '''
+diff --git a/tests/a.py b/tests/a.py
+--- a/tests/a.py
++++ b/tests/a.py
+@@ -4,0 +5 @@ def test_x() -> None:
++    pytest.skip("x")
+'''
+findings = ['tests/a.py:5: pytest.skip("x")']
+
+[[new_skips]]
+name = "an xfail marker added"
+diff = '''
+diff --git a/tests/a.py b/tests/a.py
+--- a/tests/a.py
++++ b/tests/a.py
+@@ -2,0 +3 @@
++@pytest.mark.xfail
+'''
+findings = ['tests/a.py:3: @pytest.mark.xfail']
+
+[[new_skips]]
+name = "the same added line under src/"
+diff = '''
+diff --git a/src/kitpkg/a.py b/src/kitpkg/a.py
+--- a/src/kitpkg/a.py
++++ b/src/kitpkg/a.py
+@@ -10,0 +11 @@ import pytest
++@pytest.mark.skip(reason="later")
+'''
+findings = []
+
+[[new_skips]]
+name = "skipif, importorskip and pytest.xfail(), in a new file"
+diff = '''
+diff --git a/tests/sub/test_new.py b/tests/sub/test_new.py
+new file mode 100644
+--- /dev/null
++++ b/tests/sub/test_new.py
+@@ -0,0 +1,6 @@
++import pytest
++np = pytest.importorskip("numpy")
++@pytest.mark.skipif(True, reason="never")
++def test_x() -> None:
++    pytest.xfail("no")
++    assert np
+'''
+findings = [
+    'tests/sub/test_new.py:2: np = pytest.importorskip("numpy")',
+    'tests/sub/test_new.py:3: @pytest.mark.skipif(True, reason="never")',
+    'tests/sub/test_new.py:5: pytest.xfail("no")',
+]
+
+[[new_skips]]
+name = "a marker on an unchanged context line, and line numbers across two hunks"
+diff = '''
+diff --git a/tests/a.py b/tests/a.py
+--- a/tests/a.py
++++ b/tests/a.py
+@@ -1,3 +1,4 @@
+ import pytest
+ @pytest.mark.skip
++# a comment
+ def test_x() -> None:
+@@ -20,2 +21,3 @@ def test_y() -> None:
+     x = 1
+-    assert x
++    assert x == 1
++    pytest.skip("flaky")
+'''
+findings = ['tests/a.py:23: pytest.skip("flaky")']
+
+[[new_skips]]
+name = "a marker in a file under tests/ that is not Python"
+diff = '''
+diff --git a/tests/README.md b/tests/README.md
+--- a/tests/README.md
++++ b/tests/README.md
+@@ -1,0 +2 @@
++Use `@pytest.mark.skip` sparingly.
+'''
+findings = []
+
+[[new_skips]]
+name = "an added line that looks like a file header"
+diff = '''
+diff --git a/tests/a.py b/tests/a.py
+--- a/tests/a.py
++++ b/tests/a.py
+@@ -1,0 +2,2 @@
++++ b/src/decoy.py
++@pytest.mark.skip
+'''
+findings = ['tests/a.py:3: @pytest.mark.skip']
+
+[[new_skips]]
+name = "two files: the hunks of the first do not swallow the second"
+diff = '''
+diff --git a/tests/a.py b/tests/a.py
+--- a/tests/a.py
++++ b/tests/a.py
+@@ -3,2 +2,0 @@
+-x = 1
+-y = 2
+@@ -9 +7 @@ def test_x() -> None:
+-    assert old
++    assert new
+@@ -20,0 +19 @@
++@pytest.mark.skip
+diff --git a/tests/b.py b/tests/b.py
+--- a/tests/b.py
++++ b/tests/b.py
+@@ -1,0 +2 @@
++@pytest.mark.xfail
+'''
+findings = ['tests/a.py:19: @pytest.mark.skip', 'tests/b.py:2: @pytest.mark.xfail']
+
+[[new_skips]]
+name = "a file without a final newline"
+diff = '''
+diff --git a/tests/a.py b/tests/a.py
+--- a/tests/a.py
++++ b/tests/a.py
+@@ -5 +5,2 @@
+-last = 1
+\ No newline at end of file
++last = 1
++pytest.skip("at import")
+\ No newline at end of file
+'''
+findings = ['tests/a.py:6: pytest.skip("at import")']
+
+[[new_skips]]
+name = "a path with a space (git ends the header with a tab)"
+diff = "diff --git a/tests/sp ace.py b/tests/sp ace.py\n--- a/tests/sp ace.py\t\n+++ b/tests/sp ace.py\t\n@@ -1,0 +2 @@\n+@pytest.mark.xfail\n"
+findings = ['tests/sp ace.py:2: @pytest.mark.xfail']
+
+[[new_skips]]
+name = "a marker used through `from pytest import mark` (PR #5 review)"
+diff = '''
+diff --git a/tests/a.py b/tests/a.py
+--- a/tests/a.py
++++ b/tests/a.py
+@@ -1,0 +2,5 @@
++from pytest import mark
++@mark.skip
++@mark.xfail(reason="later")
++@mark.skipif(True, reason="never")
++@mark.parametrize("n", [1])
+'''
+findings = [
+    'tests/a.py:3: @mark.skip',
+    'tests/a.py:4: @mark.xfail(reason="later")',
+    'tests/a.py:5: @mark.skipif(True, reason="never")',
+]
+
+[[new_skips]]
+name = "skips imported by name, and unittest's (PR #5 review, round 2)"
+diff = '''
+diff --git a/tests/b.py b/tests/b.py
+new file mode 100644
+--- /dev/null
++++ b/tests/b.py
+@@ -0,0 +1,14 @@
++import unittest
++from pytest import importorskip, skip, xfail
++np = importorskip("numpy")
++def test_one() -> None:
++    skip("later")
++def test_two() -> None:
++    xfail("known")
++@unittest.skip("later")
++@unittest.skipIf(True, "never")
++@unittest.skipUnless(False, "never")
++@unittest.expectedFailure
++def test_three() -> None:
++    raise unittest.SkipTest("later")
++skipped = "a word, not a call"
+'''
+findings = [
+    'tests/b.py:3: np = importorskip("numpy")',
+    'tests/b.py:5: skip("later")',
+    'tests/b.py:7: xfail("known")',
+    'tests/b.py:8: @unittest.skip("later")',
+    'tests/b.py:9: @unittest.skipIf(True, "never")',
+    'tests/b.py:10: @unittest.skipUnless(False, "never")',
+    'tests/b.py:11: @unittest.expectedFailure',
+    'tests/b.py:13: raise unittest.SkipTest("later")',
+]
+
+# ---------------------------------------------------------------- new_escapes (criterion 8)
+
+[[new_escapes]]
+name = "noqa in src/"
+diff = '''
+diff --git a/src/kitpkg/a.py b/src/kitpkg/a.py
+--- a/src/kitpkg/a.py
++++ b/src/kitpkg/a.py
+@@ -3,0 +4 @@
++x = f()  # noqa: F401
+'''
+findings = ['src/kitpkg/a.py:4: x = f()  # noqa: F401']
+
+[[new_escapes]]
+name = "pragma: no mutate in scripts/"
+diff = '''
+diff --git a/scripts/x.py b/scripts/x.py
+--- a/scripts/x.py
++++ b/scripts/x.py
+@@ -7,0 +8 @@
++# pragma: no mutate
+'''
+findings = ['scripts/x.py:8: # pragma: no mutate']
+
+[[new_escapes]]
+name = "type: ignore in tests/"
+diff = '''
+diff --git a/tests/t.py b/tests/t.py
+--- a/tests/t.py
++++ b/tests/t.py
+@@ -1,0 +2 @@
++# type: ignore[attr-defined]
+'''
+findings = ['tests/t.py:2: # type: ignore[attr-defined]']
+
+[[new_escapes]]
+name = "the same text in docs/"
+diff = '''
+diff --git a/docs/x.md b/docs/x.md
+--- a/docs/x.md
++++ b/docs/x.md
+@@ -1,0 +2,3 @@
++x = f()  # noqa: F401
++# pragma: no mutate
++# type: ignore[attr-defined]
+'''
+findings = []
+
+[[new_escapes]]
+name = "a removed escape"
+diff = '''
+diff --git a/src/kitpkg/a.py b/src/kitpkg/a.py
+--- a/src/kitpkg/a.py
++++ b/src/kitpkg/a.py
+@@ -4 +3,0 @@
+-x = f()  # noqa: F401
+'''
+findings = []
+
+[[new_escapes]]
+name = "the other spellings: pyright, no cover, file-wide noqa, any case"
+diff = '''
+diff --git a/src/kitpkg/b.py b/src/kitpkg/b.py
+new file mode 100644
+--- /dev/null
++++ b/src/kitpkg/b.py
+@@ -0,0 +1,8 @@
++# ruff: noqa
++# pyright: basic
++import os
++y = g()  # pyright: ignore[reportUnknownVariableType]
++if DEBUG:  # pragma: no cover
++    z = 1  #NOQA
++w = 2  #type:ignore
++v = "plain"  # an ordinary comment about noqa rules
+'''
+findings = [
+    'src/kitpkg/b.py:1: # ruff: noqa',
+    'src/kitpkg/b.py:2: # pyright: basic',
+    'src/kitpkg/b.py:4: y = g()  # pyright: ignore[reportUnknownVariableType]',
+    'src/kitpkg/b.py:5: if DEBUG:  # pragma: no cover',
+    'src/kitpkg/b.py:6: z = 1  #NOQA',
+    'src/kitpkg/b.py:7: w = 2  #type:ignore',
+]
+
+[[new_escapes]]
+name = "ruff's range suppression and coverage's partial-branch pragma (PR #5 review)"
+diff = '''
+diff --git a/src/kitpkg/c.py b/src/kitpkg/c.py
+new file mode 100644
+--- /dev/null
++++ b/src/kitpkg/c.py
+@@ -0,0 +1,6 @@
++# ruff: disable[F401]
++import os
++# ruff: enable[F401]
++if FLAG:  # pragma: no branch
++    x = 1
++y = 2  # a branch of the pragma family, in prose only
+'''
+findings = [
+    'src/kitpkg/c.py:1: # ruff: disable[F401]',
+    'src/kitpkg/c.py:4: if FLAG:  # pragma: no branch',
+]
+
+[[new_escapes]]
+name = "a Python file outside src/, scripts/ and tests/"
+diff = '''
+diff --git a/docs/spikes/probe.py b/docs/spikes/probe.py
+--- a/docs/spikes/probe.py
++++ b/docs/spikes/probe.py
+@@ -1,0 +2 @@
++x = f()  # noqa: F401
+'''
+findings = []
+
+[[new_escapes]]
+name = "the formatter and the import sorter switched off; a root conftest.py (PR #5 review, round 8)"
+diff = '''
+diff --git a/src/a.py b/src/a.py
+--- a/src/a.py
++++ b/src/a.py
+@@ -0,0 +1,6 @@
++# isort: skip_file
++# fmt: off
++x = [1,2]  # fmt: skip
++# yapf: disable
++import os  # isort: skip
++# fmt: on
+diff --git a/conftest.py b/conftest.py
+--- /dev/null
++++ b/conftest.py
+@@ -0,0 +1 @@
++import os  # noqa: F401
+'''
+findings = [
+    'src/a.py:1: # isort: skip_file',
+    'src/a.py:2: # fmt: off',
+    'src/a.py:3: x = [1,2]  # fmt: skip',
+    'src/a.py:4: # yapf: disable',
+    'src/a.py:5: import os  # isort: skip',
+    'conftest.py:1: import os  # noqa: F401',
+]
+
+[[new_skips]]
+name = "a conftest.py at the root: pytest loads it (PR #5 review, round 8)"
+diff = '''
+diff --git a/conftest.py b/conftest.py
+--- /dev/null
++++ b/conftest.py
+@@ -0,0 +1,2 @@
++def pytest_collection_modifyitems(items):
++    items[0].add_marker(pytest.mark.skip)
+diff --git a/docs/conftest.py b/docs/conftest.py
+--- /dev/null
++++ b/docs/conftest.py
+@@ -0,0 +1 @@
++pytest.skip("not loaded from here")
+'''
+findings = ['conftest.py:2: items[0].add_marker(pytest.mark.skip)']
+
+# ---------------------------------------------------------------- check(), end to end
+# A throwaway repository: `base` is committed on branch main, `head` is committed on top of it on a
+# feature branch, `untracked` is written and never added (one of its files is ignored by git).
+
+[end_to_end.base]
+"tests/test_t.py" = '''
+import pytest
+
+
+def test_kept() -> None:
+    assert True
+
+
+def test_removed() -> None:
+    assert True
+
+
+@pytest.mark.parametrize("n", [1, 2])
+def test_cases(n: int) -> None:
+    assert n
+
+
+def test_marked_later() -> None:
+    assert True
+'''
+"src/pkg/a.py" = '''
+x = 1
+'''
+".gitignore" = '''
+tests/scratch_*.py
+'''
+
+[end_to_end.head]
+"tests/test_t.py" = '''
+import pytest
+
+
+def test_kept() -> None:
+    assert True
+
+
+@pytest.mark.skip(reason="later")
+def test_new() -> None:
+    assert True
+
+
+@pytest.mark.parametrize("n", [1])
+def test_cases(n: int) -> None:
+    assert n
+
+
+@pytest.mark.eval
+def test_marked_later() -> None:
+    assert True
+'''
+"src/pkg/a.py" = '''
+x = 1
+y = 2  # noqa: E501
+'''
+"scripts/tool.py" = '''
+import os  # noqa: F401
+'''
+"tests/helpers.py" = '''
+count: int = "three"  # type: ignore[assignment]
+'''
+
+[end_to_end.untracked]
+"conftest.py" = '''
+import pytest
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    items[0].add_marker(pytest.mark.skip)
+'''
+"tests/test_untracked.py" = '''
+import pytest
+
+
+def test_later() -> None:
+    pytest.skip("x")
+'''
+"src/pkg/b.py" = '''
+z = 3  # pragma: no cover
+'''
+"tests/empty.py" = ""
+"tests/scratch_ignored.py" = '''
+import pytest
+
+
+@pytest.mark.skip(reason="ignored by git, so not part of any change")
+def test_scratch() -> None:
+    assert True
+'''
+
+[end_to_end.expected]
+# test_marked_later is still collected, but the marker took it out of `make check`
+vanished = [
+    "tests/test_t.py::test_cases[2]",
+    "tests/test_t.py::test_marked_later",
+    "tests/test_t.py::test_removed",
+]
+skips = [
+    'tests/test_t.py:8: @pytest.mark.skip(reason="later")',
+    'conftest.py:5: items[0].add_marker(pytest.mark.skip)',
+    'tests/test_untracked.py:5: pytest.skip("x")',
+]
+escapes = [
+    'scripts/tool.py:1: import os  # noqa: F401',
+    'src/pkg/a.py:2: y = 2  # noqa: E501',
+    'tests/helpers.py:1: count: int = "three"  # type: ignore[assignment]',
+    'src/pkg/b.py:1: z = 3  # pragma: no cover',
+]
