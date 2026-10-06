@@ -97,5 +97,5 @@ forbidden_modules = ["kitpkg.io", "kitpkg.main"] # knob: package
 source_paths = ["src/kitpkg"] # knob: package
 pytest_add_cli_args = ["-m", "not live and not eval and not prove"]
 pytest_add_cli_args_test_selection = ["tests/"]
-also_copy = ["scripts/", ".claude/"] # the harness tests import the gate scripts, which read .claude/
+also_copy = ["scripts/", ".claude/", "kit.py"] # the harness tests import the gate scripts (which read .claude/) and kit.py
 use_setproctitle = false

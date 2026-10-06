@@ -4,19 +4,18 @@ The research notes, the changelog and the decision records cite the source on pu
 lock file and the license are not prose; everything else is scanned.
 """
 
-from pathlib import Path
-
 import kit
 
-from conftest import SOURCE_TOKENS, Leftovers
+from conftest import REPO_ROOT, SOURCE_TOKENS, Leftovers
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = REPO_ROOT
 CITES_THE_SOURCE = (
     "docs/kit/research/*",
     "CHANGELOG.md",
     "docs/decisions/*",
     "uv.lock",
     "LICENSE",
+    "docs/kit/LICENSE",  # where init puts the kit's license in a project
     "docs/kit/LICENSE",  # where init puts the kit's license in a project
     "tests/harness/conftest.py",  # the token list itself
 )

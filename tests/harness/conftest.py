@@ -2,6 +2,7 @@
 
 import fnmatch
 import re
+import subprocess
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -65,3 +66,19 @@ def _leftovers(
 @pytest.fixture
 def leftovers() -> Leftovers:
     return _leftovers
+
+
+def _repo_root() -> Path:
+    """The repository this test tree belongs to, asked of git: mutmut runs the tests from a copy
+    under mutants/, where `Path(__file__).parents[2]` would point at the copy."""
+    here = Path(__file__).resolve().parent
+    out = subprocess.run(
+        ["git", "-C", str(here), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return Path(out.stdout.strip())
+
+
+REPO_ROOT = _repo_root()

@@ -8,13 +8,13 @@ one side only, is what this module notices — in the kit, and in every project 
 import json
 import re
 import tomllib
-from pathlib import Path
 
 import guard_bash
 import review
 import stop_gate
+from conftest import REPO_ROOT
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = REPO_ROOT
 
 
 def read(path: str) -> str:

@@ -14,9 +14,9 @@ from pathlib import Path
 import kit
 import pytest
 
-from conftest import Leftovers
+from conftest import REPO_ROOT, Leftovers
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = REPO_ROOT
 ANSWERS = kit.Answers(
     package="demo", base="develop", prefix="unit", maintainer="Ada Lovelace", python="3.13.14"
 )
