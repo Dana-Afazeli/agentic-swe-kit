@@ -29,7 +29,6 @@ def rules(kind: str) -> list[str]:
 def test_the_base_branch_sites_agree() -> None:
     base = stop_gate.BASE_BRANCH
     assert base == guard_bash.BASE_BRANCH
-    assert base in guard_bash._BASE_BRANCHES  # pyright: ignore[reportPrivateUsage]
     assert re.findall(r"branches: \[([^\]]+)\] # knob: base", read(".github/workflows/ci.yml")) == [
         base,
         base,

@@ -17,6 +17,7 @@ CITES_THE_SOURCE = (
     "docs/decisions/*",
     "uv.lock",
     "LICENSE",
+    "docs/kit/LICENSE",  # where init puts the kit's license in a project
     "tests/harness/conftest.py",  # the token list itself
 )
 
