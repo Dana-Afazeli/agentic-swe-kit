@@ -537,15 +537,20 @@ def test_the_reviewers_environment_leaves_out_the_launchers_virtual_environment(
         "PATH": "/work/checkout/.venv/bin:/usr/bin:/bin",
         "HOME": "/home/x",
     }
+    # The marker tells the Stop hook that this is a reviewer's clone: a reviewer changes nothing,
+    # and the branch's own red (a renamed test awaiting the label) must not hold it (PR 1).
+    marker = {review.REVIEWER_CLONE_VARIABLE: "1"}
     assert review.reviewer_env(environ, Path("/work/checkout")) == {
         "PATH": "/usr/bin:/bin",
         "HOME": "/home/x",
+        **marker,
     }
-    assert review.reviewer_env({"HOME": "/home/x"}, Path("/work")) == {"HOME": "/home/x"}
+    assert review.reviewer_env({"HOME": "/home/x"}, Path("/work")) == {"HOME": "/home/x", **marker}
     # only that environment's own entries go: a folder that merely starts with its name stays
     neighbours = {"PATH": "/work/checkout/.venv:/work/checkout/.venv-other/bin:/bin"}
     assert review.reviewer_env(neighbours, Path("/work/checkout")) == {
-        "PATH": "/work/checkout/.venv-other/bin:/bin"
+        "PATH": "/work/checkout/.venv-other/bin:/bin",
+        **marker,
     }
 
 

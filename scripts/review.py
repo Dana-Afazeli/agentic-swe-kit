@@ -504,8 +504,14 @@ def run_in_root(args: list[str]) -> CompletedProcess[str]:
         )
 
 
+# The Stop hook (scripts/stop_gate.py) reads this: a reviewer changes nothing, so the branch's own
+# red — a renamed test awaiting the label — must not keep it from stopping (PR 1 of the kit).
+REVIEWER_CLONE_VARIABLE = "KIT_REVIEWER_CLONE"
+
+
 def reviewer_env(environ: Mapping[str, str], root: Path) -> dict[str, str]:
-    """The environment of a reviewer process: the launcher's, without its virtual environment.
+    """The environment of a reviewer process: the launcher's, without its virtual environment,
+    plus the marker the Stop hook reads.
 
     The launcher runs under `uv run`, which names the launcher's own `.venv` and puts it first on
     the PATH. A reviewer works in a clone with an environment of its own; with the launcher's on
@@ -513,6 +519,7 @@ def reviewer_env(environ: Mapping[str, str], root: Path) -> dict[str, str]:
     """
     venv = root / ".venv"
     env = {name: value for name, value in environ.items() if name != "VIRTUAL_ENV"}
+    env[REVIEWER_CLONE_VARIABLE] = "1"
     if "PATH" in env:
         entries = env["PATH"].split(os.pathsep)
         kept = [

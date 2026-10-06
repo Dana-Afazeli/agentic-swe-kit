@@ -77,7 +77,7 @@ fail_under = 90
 show_missing = true
 
 # The one architecture contract the kit ships (docs/kit/HARNESS.md, "Architecture contract"):
-# `core` holds the decisions and stays pure; `io` and `main` hold the boundaries. Add the I/O
+# `core` holds the decisions and stays pure; `io` and `main.py` hold the boundaries. Add the I/O
 # packages your project uses to `forbidden_modules` (httpx, sqlalchemy, …) and add contracts as
 # the architecture grows; `make arch` enforces whatever is here.
 [tool.importlinter]

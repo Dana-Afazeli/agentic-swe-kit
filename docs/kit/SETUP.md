@@ -16,7 +16,7 @@ the guard's tests ask every installed shell, so both zsh and bash are fine.
    this repository and point `origin` at an empty one; `init` works the same.)
 2. Clone it, then render the placeholders:
    ```sh
-   python3 kit.py init --package <name> --maintainer "<Your Name>" [--base main] [--branch-prefix main] [--python 3.13.12] [--labels] [--hooks]
+   python3 kit.py init --package <name> --maintainer "<Your Name>" [--base <branch>] [--branch-prefix <prefix>] [--python X.Y.Z] [--labels] [--hooks]
    ```
    - `--package`: a Python identifier; `src/kitpkg` becomes `src/<name>` and every knob site follows.
    - `--maintainer`: replaces the role phrase "the maintainer" in the texts the agents read.

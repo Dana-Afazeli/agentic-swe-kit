@@ -19,6 +19,22 @@ moves to.
 - `.github/actions/base`: the ref CI compares against, including the first push of a branch, where
   `github.event.before` is forty zeros and the whole history counts from the root commit. The
   seed's first CI run was red on all three push jobs for that reason.
+- The Stop hook stands aside in a reviewer's clone: `scripts/review.py` marks its processes with
+  `KIT_REVIEWER_CLONE=1`. Both reviewers of PR 1 had run to their time limits, blocked by the
+  branch's own renamed tests, with their reports written and unposted.
+
+### Changed in the review of PR 1
+- Branch names are rendered in prose, rules and workflows only; in a `.py` file only the `# knob:`
+  lines change (a test asserts it for every kit-owned `.py`). Rendering them into test data had
+  left a project with another base red on four tests, and on lint for a long name.
+- `tests/harness/test_no_leftovers.py` is kit-only: it scans for the source project's names, and a
+  project whose maintainer or package carries one would have failed its own gate.
+- `.github/*` narrowed to the kit's three paths; a project's own workflow is not managed. `render`
+  refuses inside a project.
+- `kit.lock` is written with TOML strings (a name outside the BMP could not be read back);
+  `validate()` refuses module-shadowing package names, branch names git refuses, and quotes in the
+  maintainer's name; a missing `uv`, `make` or `gh` is a sentence, not a traceback; `init` stages
+  again after `uv lock` and `ruff format`.
 - The harness extracted from the source project (`v2` @ `606515e`, 2026-10-06): `make check`
   (ruff, basedpyright strict, import-linter, pytest with a 90 % branch-coverage floor), `make mutate`
   with its gate script, the Bash guard, the Stop gate, the format hook, `integrity.py`, `review.py`

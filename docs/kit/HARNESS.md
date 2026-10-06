@@ -149,7 +149,8 @@ reviewed; `.claude/settings.local.json` stays gitignored for machine-only tweaks
 - deny: force-push, the plain spellings of a push to the base branch, `git reset --hard`, `git commit
   --no-verify`, `gh label`, `gh pr edit --add-label|--remove-label`, `rm -rf ~…`. A deny rule matches
   a spelling; the Bash guard catches the flag wherever it sits. Beware a prefix deny that also covers
-  the unit branches: `Bash(git push origin main:*)` would refuse `git push origin main-001-slug`.
+  the unit branches: a deny written `Bash(git push origin <base>:*)` also refuses a push of
+  `<prefix>-001-slug` whenever the prefix starts with the base's name, as the kit's default does.
 - env: `CLAUDE_CODE_SUBAGENT_MODEL` = Sonnet (built-in subagents; a spawn that names a model wins).
 - hooks — Python, typed and tested, in `scripts/`, each run as `uv run --project
   "$CLAUDE_PROJECT_DIR" python "$CLAUDE_PROJECT_DIR/scripts/<name>.py"` because hook commands start in
@@ -168,7 +169,11 @@ reviewed; `.claude/settings.local.json` stays gitignored for machine-only tweaks
     carries `checks-weakened-approved`, read with `gh pr view` as the CI job reads it. Labels it cannot
     read: it blocks. Any failure inside the hook: it blocks (an uncaught exception would exit 1, which
     does not block). **No `stop_hook_active` bypass**: the CLI stops after eight consecutive blocks,
-    and that is the only way out.
+    and that is the only way out. One exemption: a reviewer process started by `scripts/review.py`
+    carries `KIT_REVIEWER_CLONE=1`, and the hook stands aside — a reviewer changes nothing, and the
+    branch's own red (a renamed test awaiting the label) must not keep it from ending. An implementer
+    cannot set that variable for its hooks: they run with Claude Code's environment, and the settings
+    file that could change it is a gate file.
 - Claude Code picks up hook edits while a session runs (file watcher); agent definitions
   (`.claude/agents/*.md`) load at session start. A hook that cannot start does not block: check
   `/hooks` after a change.
@@ -209,8 +214,8 @@ would rewrite them), and `tests/harness/test_kit.py` is kit-only (it tests the k
 | Knob | Kit value | Flag | Where |
 |---|---|---|---|
 | package | `kitpkg` | `--package` | `src/<pkg>/`; `pyproject.toml` (`name`, hatch path, coverage source, contract modules, mutmut paths); `ci.yml` mutation path; `review.py` work dir; `project.mk`; tests |
-| base branch | main (the kit's default) | `--base` | `stop_gate.py`, `guard_bash.py`, `ci.yml` `branches:`, `settings.json` rules, `AGENTS.md`, the skill texts |
-| branch prefix | = base | `--branch-prefix` | `settings.json` rules, `review.py`, `AGENTS.md`, the brief template |
+| base branch | main (the kit's default) | `--base` | the `# knob: base` lines of `stop_gate.py`, `guard_bash.py` and `ci.yml`; `settings.json` rules; `AGENTS.md`, the skill texts and the documents (`` `main` ``, `origin/main`, `HEAD:main`) — in a `.py` file only the knob line changes |
+| branch prefix | = base | `--branch-prefix` | the `# knob: prefix` line of `review.py`; `settings.json` rules; `AGENTS.md`, the brief template and the documents (`main-NNN-`, `main-:*`) — in a `.py` file only the knob line changes |
 | maintainer | `the maintainer` | `--maintainer` | `AGENTS.md`, the PR template, the skill texts, the documents — never a `.py` file: hook messages keep the role phrase, so a rename cannot change how code is formatted |
 | python | `3.13.12` | `--python` | `.python-version`, `requires-python`, basedpyright `pythonVersion` |
 

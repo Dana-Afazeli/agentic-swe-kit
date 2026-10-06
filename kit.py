@@ -90,17 +90,53 @@ class Answers:
             )
         elif self.package != self.package.lower():
             problems.append(f"--package {self.package!r}: use lowercase (PEP 8 package names)")
+        elif self.package in SHADOWED:
+            problems.append(
+                f"--package {self.package!r} would shadow a module the tests import first "
+                f"(pytest's path puts kit.py and scripts/ before src/)"
+            )
         for name in ("base", "prefix"):
             value = getattr(self, name)
-            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", value) or value.endswith("/"):
-                problems.append(
-                    f"--{name.replace('prefix', 'branch-prefix')} {value!r} is not a branch name"
-                )
+            if not is_branch_name(value):
+                option = "branch-prefix" if name == "prefix" else name
+                problems.append(f"--{option} {value!r} is not a branch name")
         if not re.fullmatch(r"\d+\.\d+\.\d+", self.python):
             problems.append(f"--python {self.python!r} is not X.Y.Z")
         if not self.maintainer.strip():
             problems.append("--maintainer is empty")
+        elif re.search(r'["`$\\\n]', self.maintainer):
+            # the name lands inside the echo "…" lines of ci.yml and in JSON rule texts
+            problems.append("--maintainer: no double quote, backtick, dollar sign or backslash")
         return problems
+
+
+# Module names that pytest's path (`pythonpath = ["scripts", "."]`) resolves before `src/`.
+SHADOWED = frozenset(
+    {
+        "kit",
+        "conftest",
+        "guard_bash",
+        "stop_gate",
+        "fmt_hook",
+        "integrity",
+        "mutation_gate",
+        "review",
+    }
+    | {"tests", "scripts", "docs", "src"}
+)
+
+
+def is_branch_name(value: str) -> bool:
+    """What git accepts as a branch name (`a..b`, `x.lock`, a space: refused), asked of git."""
+    if not value or value.startswith("-"):
+        return False
+    try:
+        result = subprocess.run(
+            ["git", "check-ref-format", "--branch", value], capture_output=True, check=False
+        )
+    except FileNotFoundError:  # no git: the rough shape has to do
+        return re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", value) is not None
+    return result.returncode == 0
 
 
 PLACEHOLDER = Answers(
@@ -111,13 +147,17 @@ PLACEHOLDER = Answers(
 # Patterns match whole repository-relative paths; `*` matches across `/` (fnmatch). The first
 # category that matches wins, so the more specific patterns come first. docs/kit/HARNESS.md,
 # "File ownership", explains the four categories; tests/harness/test_kit.py checks that every
-# tracked file falls into exactly one.
+# tracked file of the kit falls into one. The manifest describes the kit's tree: a path a project
+# adds beside it (its own workflow, skills, decisions, briefs) is the project's and is never
+# managed, whatever a broad pattern here would say — `update` walks the kit's paths only.
 
 KIT_OWNED = (
     "kit.py",
     "Makefile",
     ".claude/*",
-    ".github/*",
+    ".github/workflows/ci.yml",
+    ".github/actions/*",
+    ".github/pull_request_template.md",
     ".pre-commit-config.yaml",
     "scripts/*",
     "tests/harness/*",
@@ -148,6 +188,7 @@ KIT_ONLY_FIRST = (
     "docs/FRICTION.md",
     "docs/BACKLOG.md",
     "tests/harness/test_kit.py",  # tests the kit's own tree and `init`; meaningless in a project
+    "tests/harness/test_no_leftovers.py",  # scans for the source project's names; the kit's only
 )
 KIT_ONLY = (
     "docs/decisions/*",
@@ -239,10 +280,18 @@ def _base_in_text(text: str, a: Answers) -> str:
 def _maintainer(text: str, a: Answers) -> str:
     if a.maintainer == PLACEHOLDER.maintainer:
         return text  # the role phrase stays, in both cases
-    return re.sub(r"\b[Tt]he maintainer\b", lambda _: a.maintainer, text)
+    # `\s+`: hard-wrapped prose may break the phrase over a line end; the name joins the lines
+    return re.sub(r"\b[Tt]he\s+maintainer\b", lambda _: a.maintainer, text)
 
 
-PROSE_ONLY: tuple[Rule, ...] = (_maintainer,)  # never in .py: a rename must not reformat code
+# Never in a .py file: the Python knob sites are the `# knob:` lines, and anything else a name
+# could change there — a test's own data, a line's length — would change what the file means or
+# how it is formatted. The rename of a branch or a person stays in prose, rules and workflows.
+PROSE_ONLY: tuple[Rule, ...] = (
+    _prefix_in_text,  # before the base: in the kit both read `main`
+    _base_in_text,
+    _maintainer,
+)
 
 
 def _package(text: str, a: Answers) -> str:
@@ -254,8 +303,6 @@ RULES: tuple[Rule, ...] = (
     _knob_line("base", _on_knob_base),
     _knob_line("prefix", _on_knob_prefix),
     _knob_line("python", _on_knob_python),
-    _prefix_in_text,  # before the base: in the kit both read `main`
-    _base_in_text,
     _package,
 )
 
@@ -285,14 +332,20 @@ def render_path(path: str, answers: Answers) -> str:
 # ----------------------------------------------------------------------------- the lock
 
 
+def toml_string(value: str) -> str:
+    """A TOML basic string. JSON's escapes are TOML's, except that JSON writes a character outside
+    the BMP as a surrogate pair, which TOML refuses: `ensure_ascii=False` writes the character."""
+    return json.dumps(value, ensure_ascii=False)
+
+
 def write_lock(root: Path, answers: Answers, version: str = KIT_VERSION) -> None:
-    quoted = {f.name: json.dumps(getattr(answers, f.name)) for f in fields(answers)}
+    quoted = {f.name: toml_string(getattr(answers, f.name)) for f in fields(answers)}
     lines = [
         "# Written by `kit.py init`, rewritten by `kit.py update`. Do not edit by hand.",
         "[kit]",
-        f"repo = {json.dumps(KIT_REPO)}",
-        f"version = {json.dumps(version)}",
-        f"date = {json.dumps(dt.date.today().isoformat())}",
+        f"repo = {toml_string(KIT_REPO)}",
+        f"version = {toml_string(version)}",
+        f"date = {toml_string(dt.date.today().isoformat())}",
         "",
         "[answers]",
         *(f"{name} = {value}" for name, value in quoted.items()),
@@ -312,8 +365,30 @@ def read_lock(root: Path) -> tuple[str, Answers]:
 # ----------------------------------------------------------------------------- git and shell
 
 
+class Missing(Exception):
+    """A program this step needs is not installed."""
+
+    def __init__(self, program: str) -> None:
+        super().__init__(program)
+        self.program = program
+
+
 def run(args: list[str], cwd: Path, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=check)
+    try:
+        return subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=check)
+    except FileNotFoundError as error:
+        raise Missing(args[0]) from error
+
+
+def step(command: list[str], cwd: Path) -> bool:
+    """Run a command for the user to see; True when it succeeded, False when it failed or is not
+    installed (said, not raised: by then the tree has been rewritten)."""
+    say(" ".join(command))
+    try:
+        return subprocess.run(command, cwd=cwd, check=False).returncode == 0
+    except FileNotFoundError:
+        say(f"{command[0]} is not installed: install it, then run the step by hand")
+        return False
 
 
 def tracked_files(root: Path) -> list[str]:
@@ -366,8 +441,8 @@ def render_tree(src: Path, dst: Path, answers: Answers, paths: Iterable[str]) ->
     return written
 
 
-def init(args: argparse.Namespace) -> int:
-    root = Path.cwd()
+def answers_from(args: argparse.Namespace) -> Answers | None:
+    """The answers on the command line, or None after saying what is wrong with them."""
     answers = Answers(
         package=args.package,
         base=args.base,
@@ -376,9 +451,15 @@ def init(args: argparse.Namespace) -> int:
         python=args.python,
     )
     problems = answers.validate()
-    if problems:
-        for problem in problems:
-            say(problem)
+    for problem in problems:
+        say(problem)
+    return None if problems else answers
+
+
+def init(args: argparse.Namespace) -> int:
+    root = Path.cwd()
+    answers = answers_from(args)
+    if answers is None:
         return 2
     if (root / LOCK).exists():
         say(f"{LOCK} exists: this project was initialised already (kit.py update takes updates)")
@@ -393,15 +474,13 @@ def init(args: argparse.Namespace) -> int:
     paths = tracked_files(root)
     written = render_tree(root, root, answers, paths)
     write_lock(root, answers)
-    run(["git", "add", "-A"], root)  # staged: `git diff --cached` is all that init did
+    run(["git", "add", "-A"], root)
     say(
         f"rendered {len(written)} files for package {answers.package!r}, base {answers.base!r}, "
         f"prefix {answers.prefix!r}, maintainer {answers.maintainer!r}, Python {answers.python}"
     )
-    say(
-        f"removed the kit-only files; seeded README.md, docs/DELTAS.md, docs/ROADMAP.md, "
-        f"docs/FRICTION.md, docs/BACKLOG.md, docs/kit/LICENSE; wrote {LOCK}"
-    )
+    seeded = ", ".join(sorted(SEEDS.values()))
+    say(f"removed the kit-only files; seeded {seeded}; wrote {LOCK}")
 
     status = 0
     if not args.no_sync:
@@ -417,39 +496,45 @@ def init(args: argparse.Namespace) -> int:
             ["make", "check"],
         )
         for command in commands:
-            say(" ".join(command))
-            if subprocess.run(command, cwd=root, check=False).returncode != 0:
-                say(f"{' '.join(command)} failed: fix it, then `make check` again")
+            if not step(command, root):
+                say(f"{' '.join(command)} did not succeed: fix it, then `make check` again")
                 status = 1
                 break
     if args.labels:
         status = max(status, create_labels(root))
-    if args.hooks:
-        say("uv run prek install")
-        if subprocess.run(["uv", "run", "prek", "install"], cwd=root, check=False).returncode != 0:
-            status = 1
+    if args.hooks and not step(["uv", "run", "prek", "install"], root):
+        status = 1
+    # once more: `uv lock` and `ruff format` change tracked files after the first staging
+    run(["git", "add", "-A"], root)
 
+    steps = ["Read what init did (`git status`, `git diff --cached`), then commit it."]
+    steps.append("Push; the first CI run compares against the root commit and should be green.")
+    if not args.labels:
+        steps.append("Create the labels: `python3 kit.py labels` (or --labels on init).")
+    if not args.hooks:
+        steps.append("In the development checkout only: `uv run prek install`.")
+    if "\nprove:" in (root / "Makefile").read_text("utf-8"):
+        steps.append("`make prove` — every gate shown red on a planted defect, on this machine.")
+    steps.append("Read docs/kit/SETUP.md; write the first brief from docs/briefs/000-TEMPLATE.md.")
     print()
     print(f"Next steps for {answers.maintainer}:")
-    print("  1. Read what init did (`git status`, `git diff --cached`), then commit it.")
-    print("  2. Push; the first CI run compares against the root commit and should be green.")
-    if not args.labels:
-        print("  3. Create the labels: `python3 kit.py labels` (or --labels on init).")
-    if not args.hooks:
-        print("  4. In the development checkout only: `uv run prek install`.")
-    print("  5. `make prove` — every gate shown red on a planted defect, on this machine.")
-    print("  6. Read docs/kit/SETUP.md; write the first brief from docs/briefs/000-TEMPLATE.md.")
+    for number, text in enumerate(steps, 1):
+        print(f"  {number}. {text}")
     return status
 
 
 def create_labels(root: Path) -> int:
     status = 0
     for name, color, description in LABELS:
-        result = run(
-            ["gh", "label", "create", name, "--color", color, "--description", description],
-            root,
-            check=False,
-        )
+        try:
+            result = run(
+                ["gh", "label", "create", name, "--color", color, "--description", description],
+                root,
+                check=False,
+            )
+        except Missing:
+            say("gh is not installed: create the labels later with `python3 kit.py labels`")
+            return 1
         if result.returncode == 0:
             say(f"label {name} created")
         elif "already exists" in result.stderr:
@@ -466,17 +551,11 @@ def create_labels(root: Path) -> int:
 def render_command(args: argparse.Namespace) -> int:
     """Render the kit into another directory, for a look or for a test; the kit is untouched."""
     root = Path.cwd()
-    answers = Answers(
-        package=args.package,
-        base=args.base,
-        prefix=args.branch_prefix or args.base,
-        maintainer=args.maintainer,
-        python=args.python,
-    )
-    problems = answers.validate()
-    if problems:
-        for problem in problems:
-            say(problem)
+    if (root / LOCK).exists():
+        say(f"{LOCK} exists: this is a project, not the kit; render runs in a clone of the kit")
+        return 2
+    answers = answers_from(args)
+    if answers is None:
         return 2
     into = Path(args.into)
     into.mkdir(parents=True, exist_ok=True)

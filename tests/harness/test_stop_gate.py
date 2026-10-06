@@ -257,6 +257,21 @@ def test_nothing_changed_runs_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     assert run.calls == []
 
 
+def test_a_reviewers_clone_is_not_gated(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The review launcher marks its processes: a reviewer changes nothing, and the branch's own
+    red — a test the maintainer has yet to approve — would otherwise keep it from ever stopping
+    (PR 1 of the kit: both reviewers ran to their time limits that way)."""
+    changed_set(monkeypatch, "src/pkg/a.py")
+    monkeypatch.setenv(stop_gate.REVIEWER_CLONE_VARIABLE, "1")
+    run = Runner(make=(2, "would be red\n"))
+
+    assert stop_gate.main(run) == 0
+    assert run.calls == []
+    assert "reviewer" in capsys.readouterr().err
+
+
 def test_git_that_cannot_say_what_changed_blocks_with_its_reason(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
