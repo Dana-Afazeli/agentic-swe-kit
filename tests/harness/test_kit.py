@@ -661,7 +661,7 @@ def kit_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return repo
 
 
-def project_from(kit_repo: Path, where: Path, *answers: str) -> Path:
+def make_project(kit_repo: Path, where: Path, *answers: str) -> Path:
     """A project made from the kit at v0.1.0 (`init --no-sync`), its lock pointing at `kit_repo`,
     on a branch of its own as `update` wants it."""
     kit.export(kit_repo, "v0.1.0", where)
@@ -675,6 +675,21 @@ def project_from(kit_repo: Path, where: Path, *answers: str) -> Path:
     git(where, "add", "-A")
     git(where, "commit", "-q", "-m", "init")
     git(where, "switch", "-q", "-c", "main-kit-update")
+    return where
+
+
+_PROJECTS: dict[tuple[str, ...], Path] = {}
+
+
+def project_from(kit_repo: Path, where: Path, *answers: str) -> Path:
+    """`make_project`, built once per set of answers and copied: `init` costs a second each time,
+    a copy of the result a few milliseconds."""
+    key = (str(kit_repo), *answers)
+    if key not in _PROJECTS:
+        _PROJECTS[key] = make_project(
+            kit_repo, where.parent / f"template-{len(_PROJECTS)}", *answers
+        )
+    shutil.copytree(_PROJECTS[key], where, symlinks=True)
     return where
 
 
