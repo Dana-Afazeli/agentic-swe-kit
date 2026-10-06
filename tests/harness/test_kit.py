@@ -458,3 +458,36 @@ def test_render_into_another_directory_leaves_the_kit_alone(
     assert (into / "src/demo/main.py").is_file() and (into / kit.LOCK).is_file()
     assert not (into / "CHANGELOG.md").exists()
     assert git(copy_of_the_kit, "status", "--porcelain") == ""
+
+
+def test_a_rendered_projects_harness_tests_pass_with_other_names(tmp_path: Path) -> None:
+    """The kit-owned tests are rendered into every project and run in its gate, so they must hold
+    for any names: a test whose data spells the kit's base or prefix is red there and green here.
+    `render_tree` with long branch names into a repository of its own, then the harness tests
+    there with this interpreter (no `uv sync`: those tests import no package)."""
+    rendered = tmp_path / "rendered"
+    kit.render_tree(ROOT, rendered, LONG_NAMES, kit.tracked_files(ROOT))
+    kit.write_lock(rendered, LONG_NAMES)
+    git(rendered, "init", "-q", "-b", LONG_NAMES.base)
+    git(rendered, "add", "-A")
+    git(rendered, "commit", "-q", "-m", "rendered")
+    # the modules whose data names a branch or reads a knob; the guard's 600 cases and the
+    # integrity tests build their own repositories and are not worth the 20 s here
+    modules = ["test_stop_gate.py", "test_review.py", "test_knobs.py", "test_gate_lists.py"]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            *(f"tests/harness/{m}" for m in modules),
+            "-q",
+            "-x",
+            "-p",
+            "no:cacheprovider",
+        ],
+        cwd=rendered,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout[-3000:] + result.stderr[-1000:]

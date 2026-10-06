@@ -344,7 +344,7 @@ def repo(tmp_path: Path) -> tuple[Path, Git]:
 def test_find_base_prefers_the_remote_branch(repo: tuple[Path, Git]) -> None:
     root, git = repo
     assert stop_gate.find_base(root) == stop_gate.BASE_BRANCH
-    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    git("update-ref", f"refs/remotes/origin/{stop_gate.BASE_BRANCH}", "HEAD")
     assert stop_gate.find_base(root) == f"origin/{stop_gate.BASE_BRANCH}"
 
 
