@@ -79,14 +79,27 @@ git switch -c <prefix>-kit-update          # a branch; the update is a PR like a
 uv run python kit.py status                # your version, the newest tag, kit-owned files you changed
 uv run python kit.py update [--to vX.Y.Z]  # default: the newest tag
 ```
-`update` clones the kit, renders the version you have and the version you asked for with the answers
-in `kit.lock`, and three-way merges every kit-owned file (`git merge-file`). Then it writes the new
-`kit.lock`, prints the changelog between the two versions, re-locks and runs `make check`. It lists:
-- files merged cleanly;
-- files with **conflict markers** — resolve them, then `make check`;
-- kit-owned files you had deleted (not recreated) and files the kit removed that you had changed
-  (left in place) — decide each.
+`update` clones the kit, exports the version you have and the version you asked for, renders both
+with the answers in `kit.lock`, and three-way merges every kit-owned file (`git merge-file`: base =
+the old kit rendered, yours = your file, theirs = the new kit rendered). Then it writes the new
+`kit.lock` (version and commit), prints the changelog sections between the two versions, stages
+everything, re-locks and runs `make check`. It says how many files merged, and lists:
+- **conflicts** — files with markers (`<<<<<<< yours` … `>>>>>>> kit X.Y.Z`): resolve them, then
+  `make check`; the exit code is 1 until you do;
+- **kept** — files the kit removed that you had changed (left in place: delete or keep);
+- **missing** — kit-owned files you had deleted (not recreated);
+- **not added** — files new in the kit where you already have another file.
 Then `make prove`, open the PR, read the diff (it touches gate files: `gates-approved`), merge.
+
+A project made from the kit before `update` existed has a `kit.py` without it: copy the kit's
+`kit.py` over yours first (`kit.py` is copied verbatim by every update anyway) and commit, then run
+`update`. The merge of `kit.py` itself is then a no-op.
+
+Two options for the unusual case. `--from <ref>`: the kit commit this project was rendered from,
+when the lock has none and the kit has no tag for the lock's version (a project made from the kit
+before its first release). `--to <ref>`: any kit ref — a tag, a branch, a commit — not only a
+release; `update` refuses a target older than what you have. `--repo` points at another copy of
+the kit (a local clone, a fork). `status` fetches the kit too, so both need the network.
 
 What survives an update: your dependencies and `[project]` table, your additions to
 `.claude/settings.json`, `project.mk`, your workflow file, `docs/DELTAS.md`, the "Project rules"
