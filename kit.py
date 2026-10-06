@@ -388,7 +388,7 @@ def write_lock(
 ) -> None:
     quoted = {f.name: toml_string(getattr(answers, f.name)) for f in fields(answers)}
     lines = [
-        "# Written by `kit.py init`. Do not edit by hand.",
+        "# Written by `kit.py init`, rewritten by `kit.py update`. Do not edit by hand.",
         "[kit]",
         f"repo = {toml_string(repo)}",
         f"version = {toml_string(version)}",
@@ -513,7 +513,7 @@ def init(args: argparse.Namespace) -> int:
     if answers is None:
         return 2
     if (root / LOCK).exists():
-        say(f"{LOCK} exists: this project was initialised already")
+        say(f"{LOCK} exists: this project was initialised already (kit.py update takes updates)")
         return 2
     if (
         not (root / ".git").exists() or not (root / "kit.py").is_file()
@@ -819,11 +819,11 @@ def _render_export(clone: Path, ref: str, answers: Answers, work: Path, name: st
     return rendered
 
 
-def _project_checks(root: Path) -> Lock:
+def _project_checks(root: Path, require_clean: bool = True) -> Lock:
     if not (root / LOCK).is_file():
         raise Refused(f"no {LOCK} here: update runs in a project made by `kit.py init`")
     lock = read_lock(root)
-    if run(["git", "status", "--porcelain"], root).stdout.strip():
+    if require_clean and run(["git", "status", "--porcelain"], root).stdout.strip():
         raise Refused(
             "the working tree is not clean: commit or stash first, so the update is the diff"
         )
@@ -942,9 +942,9 @@ def update(args: argparse.Namespace) -> int:
 def status_command(args: argparse.Namespace) -> int:
     root = Path.cwd()
     try:
-        lock = _project_checks(root) if (root / LOCK).is_file() else None
-        if lock is None:
+        if not (root / LOCK).is_file():
             raise Refused(f"no {LOCK} here: this is not a project made by `kit.py init`")
+        lock = _project_checks(root, require_clean=False)  # a dirty tree is what status is for
         with tempfile.TemporaryDirectory(prefix="kit-status-") as tmp:
             work = Path(tmp)
             clone = work / "kit"

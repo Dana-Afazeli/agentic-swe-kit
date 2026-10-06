@@ -838,7 +838,6 @@ def test_status_names_the_versions_and_the_locally_changed_kit_files(
 
     makefile = project / "Makefile"
     makefile.write_text(makefile.read_text("utf-8") + "\n# ours\n", "utf-8")
-    git(project, "commit", "-q", "-am", "ours")
-    changed = kit_py(project, "status")
-    assert changed.returncode == 0
+    changed = kit_py(project, "status")  # a dirty tree is what status is for: no clean-tree check
+    assert changed.returncode == 0, changed.stdout + changed.stderr
     assert "Makefile" in changed.stdout and "differ from the kit" in changed.stdout
