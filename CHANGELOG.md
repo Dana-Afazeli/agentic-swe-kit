@@ -38,6 +38,9 @@ moves to.
   `init` stages again after `uv lock` and `ruff format`; `render` refuses the kit itself.
 - The reviewer-clone marker is removed from the environment of the harness's own tests (an autouse
   fixture): in a reviewer's `make check` it had turned fourteen Stop-gate tests red.
+- `init` and `render` work in a linked worktree (`.git` is a file there); a package named like a
+  standard-library module is refused; the base branch goes into `ci.yml` as a quoted YAML string;
+  the next steps say the init commit goes straight to the base branch, and why.
 - The harness extracted from the source project (`v2` @ `606515e`, 2026-10-06): `make check`
   (ruff, basedpyright strict, import-linter, pytest with a 90 % branch-coverage floor), `make mutate`
   with its gate script, the Bash guard, the Stop gate, the format hook, `integrity.py`, `review.py`
