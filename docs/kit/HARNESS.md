@@ -197,19 +197,21 @@ changed (`gates-approved`) · checks weakened (`checks-weakened-approved`).
 | **kit-owned** | `kit.py` · `Makefile` · `.claude/**` · `.github/workflows/ci.yml` · `.github/pull_request_template.md` · `.pre-commit-config.yaml` · `scripts/**` · `tests/harness/**` · `tests/prove/**` · `AGENTS.md` · `.gitignore` · `.python-version` · `docs/kit/**` · `docs/briefs/000-TEMPLATE.md` · `docs/decisions/0000-TEMPLATE.md` | three-way merge: base = the old kit rendered with your answers, ours = your file, theirs = the new kit rendered; conflicts stay as markers and are listed | add, don't edit: `project.mk`, `.github/workflows/project.yml`, `docs/DELTAS.md`, the "Project rules" section of `AGENTS.md`; added permission rules merge |
 | **mixed** | `pyproject.toml` (your dependencies, the kit's tool configuration) | three-way merge; the kit edits `[tool.*]`, you edit `[project]` and the dependency groups | edit freely; a collision is visible |
 | **project-owned** | `README.md` · `project.mk` · `src/<pkg>/**` · `tests/conftest.py` · `tests/test_*.py` · `docs/DELTAS.md` · `docs/ROADMAP.md` · `docs/FRICTION.md` · `docs/BACKLOG.md` · `docs/decisions/NNNN-*.md` · `docs/research/**` · `uv.lock` · `kit.lock` | never touched (`kit.lock` is rewritten; `uv.lock` is re-locked) | yours |
-| **kit-only** | the kit's `README.md`, `CHANGELOG.md`, `LICENSE` (copied to `docs/kit/LICENSE`), the kit's own decisions, friction log, backlog, roadmap, `docs/templates/**` | removed by `init`; never present in a project | — |
+| **kit-only** | the kit's `README.md`, `CHANGELOG.md`, `LICENSE` (copied to `docs/kit/LICENSE`), the kit's own decisions, briefs, friction log, backlog, roadmap, `docs/templates/**` | removed by `init`; never present in a project | — |
 
-The list lives in `kit.py` (`MANAGED`); `tests/harness/test_manifest.py` checks that every tracked
-file of the kit is in exactly one category.
+The list lives in `kit.py` (`CATEGORIES`, `SEEDS`); `tests/harness/test_kit.py` checks that every
+tracked file of the kit has an owner and every pattern names a file. Two exceptions inside the
+categories: `kit.py` is copied **verbatim** (its constants are the kit's placeholders; rendering it
+would rewrite them), and `tests/harness/test_kit.py` is kit-only (it tests the kit's own tree).
 
 ## 10. Knobs — what `kit.py init` rewrites
 
 | Knob | Kit value | Flag | Where |
 |---|---|---|---|
 | package | `kitpkg` | `--package` | `src/<pkg>/`; `pyproject.toml` (`name`, hatch path, coverage source, contract modules, mutmut paths); `ci.yml` mutation path; `review.py` work dir; `project.mk`; tests |
-| base branch | `main` | `--base` | `stop_gate.py`, `guard_bash.py`, `ci.yml` `branches:`, `settings.json` rules, `AGENTS.md`, the skill texts |
+| base branch | main (the kit's default) | `--base` | `stop_gate.py`, `guard_bash.py`, `ci.yml` `branches:`, `settings.json` rules, `AGENTS.md`, the skill texts |
 | branch prefix | = base | `--branch-prefix` | `settings.json` rules, `review.py`, `AGENTS.md`, the brief template |
-| maintainer | `the maintainer` | `--maintainer` | hook messages, `AGENTS.md`, PR template, skill texts, docs |
+| maintainer | `the maintainer` | `--maintainer` | `AGENTS.md`, the PR template, the skill texts, the documents — never a `.py` file: hook messages keep the role phrase, so a rename cannot change how code is formatted |
 | python | `3.13.12` | `--python` | `.python-version`, `requires-python`, basedpyright `pythonVersion` |
 
 Each site in a Python, YAML or TOML file carries a `# knob: <name>` comment; JSON rules are rewritten

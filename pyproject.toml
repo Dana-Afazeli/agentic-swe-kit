@@ -52,14 +52,14 @@ exclude = ["*.md"]
 # scripts/ holds the hooks and gate scripts, so it is checked like everything else. extraPaths
 # lets the tests import them; setting it replaces the default (`src`), so `src` is listed too.
 [tool.basedpyright]
-include = ["src", "tests", "scripts"]
-extraPaths = ["src", "scripts"]
+include = ["src", "tests", "scripts", "kit.py"]
+extraPaths = ["src", "scripts", "."]
 typeCheckingMode = "strict"
 pythonVersion = "3.13" # knob: python
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["scripts"]
+pythonpath = ["scripts", "."] # the gate scripts, and kit.py at the root
 addopts = "--strict-markers"
 asyncio_mode = "auto"
 markers = [

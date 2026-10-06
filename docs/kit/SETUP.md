@@ -20,8 +20,8 @@ the guard's tests ask every installed shell, so both zsh and bash are fine.
    ```
    - `--package`: a Python identifier; `src/kitpkg` becomes `src/<name>` and every knob site follows.
    - `--maintainer`: replaces the role phrase "the maintainer" in the texts the agents read.
-   - `--base`: the branch PRs merge into (default `main`); `--branch-prefix`: unit branches are
-     `<prefix>-NNN-slug` (default = the base).
+   - `--base`: the branch PRs merge into (the kit's default is main); `--branch-prefix`: unit
+     branches are `<prefix>-NNN-slug` (default = the base).
    - `--labels`: creates `brief-approved`, `gates-approved`, `checks-weakened-approved` with `gh`.
    - `--hooks`: `uv run prek install` — only in the development checkout.
    `init` seeds the project-owned files from `docs/templates/`, removes the kit-only files, writes

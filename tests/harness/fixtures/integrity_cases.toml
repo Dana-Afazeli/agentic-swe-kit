@@ -54,9 +54,9 @@ findings = ['tests/a.py:3: @pytest.mark.xfail']
 [[new_skips]]
 name = "the same added line under src/"
 diff = '''
-diff --git a/src/kitpkg/a.py b/src/kitpkg/a.py
---- a/src/kitpkg/a.py
-+++ b/src/kitpkg/a.py
+diff --git a/src/pkg/a.py b/src/pkg/a.py
+--- a/src/pkg/a.py
++++ b/src/pkg/a.py
 @@ -10,0 +11 @@ import pytest
 +@pytest.mark.skip(reason="later")
 '''
@@ -225,13 +225,13 @@ findings = [
 [[new_escapes]]
 name = "noqa in src/"
 diff = '''
-diff --git a/src/kitpkg/a.py b/src/kitpkg/a.py
---- a/src/kitpkg/a.py
-+++ b/src/kitpkg/a.py
+diff --git a/src/pkg/a.py b/src/pkg/a.py
+--- a/src/pkg/a.py
++++ b/src/pkg/a.py
 @@ -3,0 +4 @@
 +x = f()  # noqa: F401
 '''
-findings = ['src/kitpkg/a.py:4: x = f()  # noqa: F401']
+findings = ['src/pkg/a.py:4: x = f()  # noqa: F401']
 
 [[new_escapes]]
 name = "pragma: no mutate in scripts/"
@@ -271,9 +271,9 @@ findings = []
 [[new_escapes]]
 name = "a removed escape"
 diff = '''
-diff --git a/src/kitpkg/a.py b/src/kitpkg/a.py
---- a/src/kitpkg/a.py
-+++ b/src/kitpkg/a.py
+diff --git a/src/pkg/a.py b/src/pkg/a.py
+--- a/src/pkg/a.py
++++ b/src/pkg/a.py
 @@ -4 +3,0 @@
 -x = f()  # noqa: F401
 '''
@@ -282,10 +282,10 @@ findings = []
 [[new_escapes]]
 name = "the other spellings: pyright, no cover, file-wide noqa, any case"
 diff = '''
-diff --git a/src/kitpkg/b.py b/src/kitpkg/b.py
+diff --git a/src/pkg/b.py b/src/pkg/b.py
 new file mode 100644
 --- /dev/null
-+++ b/src/kitpkg/b.py
++++ b/src/pkg/b.py
 @@ -0,0 +1,8 @@
 +# ruff: noqa
 +# pyright: basic
@@ -297,21 +297,21 @@ new file mode 100644
 +v = "plain"  # an ordinary comment about noqa rules
 '''
 findings = [
-    'src/kitpkg/b.py:1: # ruff: noqa',
-    'src/kitpkg/b.py:2: # pyright: basic',
-    'src/kitpkg/b.py:4: y = g()  # pyright: ignore[reportUnknownVariableType]',
-    'src/kitpkg/b.py:5: if DEBUG:  # pragma: no cover',
-    'src/kitpkg/b.py:6: z = 1  #NOQA',
-    'src/kitpkg/b.py:7: w = 2  #type:ignore',
+    'src/pkg/b.py:1: # ruff: noqa',
+    'src/pkg/b.py:2: # pyright: basic',
+    'src/pkg/b.py:4: y = g()  # pyright: ignore[reportUnknownVariableType]',
+    'src/pkg/b.py:5: if DEBUG:  # pragma: no cover',
+    'src/pkg/b.py:6: z = 1  #NOQA',
+    'src/pkg/b.py:7: w = 2  #type:ignore',
 ]
 
 [[new_escapes]]
 name = "ruff's range suppression and coverage's partial-branch pragma (PR #5 review)"
 diff = '''
-diff --git a/src/kitpkg/c.py b/src/kitpkg/c.py
+diff --git a/src/pkg/c.py b/src/pkg/c.py
 new file mode 100644
 --- /dev/null
-+++ b/src/kitpkg/c.py
++++ b/src/pkg/c.py
 @@ -0,0 +1,6 @@
 +# ruff: disable[F401]
 +import os
@@ -321,8 +321,8 @@ new file mode 100644
 +y = 2  # a branch of the pragma family, in prose only
 '''
 findings = [
-    'src/kitpkg/c.py:1: # ruff: disable[F401]',
-    'src/kitpkg/c.py:4: if FLAG:  # pragma: no branch',
+    'src/pkg/c.py:1: # ruff: disable[F401]',
+    'src/pkg/c.py:4: if FLAG:  # pragma: no branch',
 ]
 
 [[new_escapes]]

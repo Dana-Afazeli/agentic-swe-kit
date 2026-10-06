@@ -176,7 +176,7 @@ Say which is which when you report; do not present a request as a control.
 - **Pushes from the clone: two nets.** Its `origin` has no push address, and a pre-push hook
   refuses every push. A push with the address typed out and `--no-verify` still gets out: the
   reviewer process has your credentials. The Bash guard, which runs in the clone too, refuses a
-  push that lands on `main` or `main`, and any change of labels.
+  push that lands on the base branch, and any change of labels.
 - **Nets, not walls**: the edit tools are denied inside the clone, and the plain spelling of a
   command that changes git state, changes the PR (`gh pr merge`, `gh pr edit`), or starts another
   `claude`, is refused. Another spelling gets through. In the clone that harms nothing; `gh` and

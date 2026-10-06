@@ -12,13 +12,15 @@ import pytest
 
 import stop_gate
 
+ORIGIN_BASE = f"origin/{stop_gate.BASE_BRANCH}"
+
 
 @pytest.mark.parametrize(
     ("changed", "expected"),
     [
         (["docs/x.md"], False),
         ([], False),
-        (["src/kitpkg/a.py"], True),
+        (["src/pkg/a.py"], True),
         (["tests/t.py"], True),
         (["scripts/fmt_hook.py"], True),
         (["Makefile"], True),
@@ -76,7 +78,7 @@ VANISHED = "vanished tests (1):\n  tests/t.py::test_gone\n"
 
 
 def changed_set(
-    monkeypatch: pytest.MonkeyPatch, *paths: str, base: str | None = "origin/main"
+    monkeypatch: pytest.MonkeyPatch, *paths: str, base: str | None = ORIGIN_BASE
 ) -> None:
     def find_base() -> str | None:
         return base
@@ -91,7 +93,7 @@ def changed_set(
 def test_red_make_check_blocks_with_the_last_40_lines(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    changed_set(monkeypatch, "src/kitpkg/a.py")
+    changed_set(monkeypatch, "src/pkg/a.py")
     output = "".join(f"line {number}\n" for number in range(1, 61))
     run = Runner(make=(2, output))
 
@@ -194,7 +196,7 @@ def test_gh_that_cannot_be_started_blocks(
 def test_make_that_cannot_be_started_blocks(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    changed_set(monkeypatch, "src/kitpkg/a.py")
+    changed_set(monkeypatch, "src/pkg/a.py")
     run = MissingProgram("make", make=(0, "ok\n"))
 
     assert stop_gate.main(run) == 2
@@ -234,14 +236,17 @@ def test_integrity_that_cannot_be_determined_blocks_with_its_reason(
 def test_green_gate_and_clean_integrity_let_the_session_stop(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    changed_set(monkeypatch, "src/kitpkg/a.py", base="main")
+    changed_set(monkeypatch, "src/pkg/a.py", base=stop_gate.BASE_BRANCH)
     run = Runner(make=(0, "ok\n"), integrity=(0, "integrity: clean\n", ""))
 
     assert stop_gate.main(run) == 0
 
     assert capsys.readouterr().err == ""
     integrity = [sys.executable, str(stop_gate.ROOT / "scripts" / "integrity.py")]
-    assert run.calls == [["make", "check"], [*integrity, "--base", "main", "--tests-only"]]
+    assert run.calls == [
+        ["make", "check"],
+        [*integrity, "--base", stop_gate.BASE_BRANCH, "--tests-only"],
+    ]
 
 
 def test_nothing_changed_runs_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -256,7 +261,7 @@ def test_git_that_cannot_say_what_changed_blocks_with_its_reason(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     def find_base() -> str | None:
-        return "origin/main"
+        return f"origin/{stop_gate.BASE_BRANCH}"
 
     def changed_paths(_base: str) -> list[str]:
         raise stop_gate.GitError("fatal: no merge base")
@@ -266,7 +271,7 @@ def test_git_that_cannot_say_what_changed_blocks_with_its_reason(
     run = Runner(make=(0, ""))
 
     assert stop_gate.main(run) == 2
-    assert "origin/main: fatal: no merge base" in capsys.readouterr().err
+    assert f"origin/{stop_gate.BASE_BRANCH}: fatal: no merge base" in capsys.readouterr().err
     assert run.calls == []
 
 
@@ -285,7 +290,7 @@ def test_no_base_branch_blocks_with_a_reason(
     run = Runner(make=(0, ""))
 
     assert stop_gate.main(run) == 2
-    assert "origin/main" in capsys.readouterr().err
+    assert f"origin/{stop_gate.BASE_BRANCH}" in capsys.readouterr().err
     assert run.calls == []
 
 
@@ -293,7 +298,7 @@ def test_a_red_gate_still_blocks_when_the_hook_already_blocked_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """No `stop_hook_active` bypass (HARNESS.md): the CLI's block cap is the only way out."""
-    changed_set(monkeypatch, "src/kitpkg/a.py")
+    changed_set(monkeypatch, "src/pkg/a.py")
     monkeypatch.setattr(sys, "stdin", io.StringIO('{"stop_hook_active": true}'))
 
     assert stop_gate.main(Runner(make=(2, "red\n"))) == 2
@@ -314,7 +319,7 @@ def repo(tmp_path: Path) -> tuple[Path, Git]:
             ["git", "-C", str(root), *identity, *quiet, *args], check=True, capture_output=True
         )
 
-    git("init", "-q", "-b", "main")
+    git("init", "-q", "-b", stop_gate.BASE_BRANCH)
     (root / "README.md").write_text("base\n", "utf-8")
     git("add", "README.md")
     git("commit", "-q", "-m", "base")
@@ -323,12 +328,12 @@ def repo(tmp_path: Path) -> tuple[Path, Git]:
 
 def test_find_base_prefers_the_remote_branch(repo: tuple[Path, Git]) -> None:
     root, git = repo
-    assert stop_gate.find_base(root) == "main"
+    assert stop_gate.find_base(root) == stop_gate.BASE_BRANCH
     git("update-ref", "refs/remotes/origin/main", "HEAD")
-    assert stop_gate.find_base(root) == "origin/main"
+    assert stop_gate.find_base(root) == f"origin/{stop_gate.BASE_BRANCH}"
 
 
-def test_find_base_is_none_without_a_v2_branch(repo: tuple[Path, Git]) -> None:
+def test_find_base_is_none_without_a_base_branch(repo: tuple[Path, Git]) -> None:
     root, git = repo
     git("branch", "-m", "trunk")
     assert stop_gate.find_base(root) is None
@@ -347,7 +352,7 @@ def test_changed_paths_joins_the_branch_diff_and_the_working_tree(repo: tuple[Pa
     (root / "staged.md").write_text("z\n", "utf-8")
     git("add", "staged.md")
 
-    assert stop_gate.changed_paths("main", root) == [
+    assert stop_gate.changed_paths(stop_gate.BASE_BRANCH, root) == [
         "README.md",
         "src/committed.py",
         "staged.md",
@@ -369,7 +374,7 @@ def test_changed_paths_lists_both_names_of_a_renamed_file(repo: tuple[Path, Git]
     git("commit", "-q", "-m", "renamed on the branch")
     git("mv", "src/two.py", "docs_two.py")  # renamed, staged, not committed
 
-    assert stop_gate.changed_paths("main", root) == [
+    assert stop_gate.changed_paths(stop_gate.BASE_BRANCH, root) == [
         "docs_one.py",
         "docs_two.py",
         "src/one.py",
@@ -385,4 +390,4 @@ def test_changed_paths_cannot_answer_for_an_unknown_base(repo: tuple[Path, Git])
 
 def test_changed_paths_is_empty_on_an_untouched_base(repo: tuple[Path, Git]) -> None:
     root, _git = repo
-    assert stop_gate.changed_paths("main", root) == []
+    assert stop_gate.changed_paths(stop_gate.BASE_BRANCH, root) == []

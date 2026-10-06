@@ -8,11 +8,11 @@ The harness copied from the source project with the kit's names, the sample pack
 `make check` and `make mutate` green; pushed to `main` directly, the only direct pushes the kit will
 ever see.
 
-## 1. `kit.py init` (brief 001)
+## 1. `kit.py init` (brief 001) — PR open 2026-10-06
 Render the placeholders, seed the project-owned files, write `kit.lock`, re-lock, `make check`;
 optional labels and hooks. Tests: `render()` is idempotent and covers every knob site; the manifest
 covers every tracked file; `init` into a copy leaves no placeholder behind (`test_no_leftovers`
-reused); `make check` is green in the copy (under the `prove` marker).
+reused); `make check` is green in the copy (by hand until brief 003 puts it under `prove`).
 Exit: a project can be started from the template with one command.
 
 ## 2. `kit.py update` and `status` (brief 002)

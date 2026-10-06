@@ -15,7 +15,7 @@ from guard_bash import RepoContext, evaluate
 ROOT = Path("/repo")
 TRACKED = frozenset(
     ROOT / name
-    for name in ("Makefile", "pyproject.toml", "src/kitpkg/main.py", "tests/test_skeleton.py")
+    for name in ("Makefile", "pyproject.toml", "src/pkg/main.py", "tests/test_skeleton.py")
 )
 
 
@@ -45,7 +45,7 @@ EOF"""
         "rm -r .venv",
         "rm coverage.xml",
         "rm tests/scratch.py",
-        "rm -rf /tmp/kitpkg-proof",
+        "rm -rf /tmp/pkg-proof",
         "cat .github/workflows/ci.yml",
         "grep -n fail_under pyproject.toml",
         "uv add httpx",
@@ -58,7 +58,7 @@ EOF"""
         "rm -rf mutants 2>/dev/null",
         "rm -rf /tmp/a /tmp/b",
         "rm -rf mutants && make mutate",
-        "cd /tmp && rm -rf /tmp/kitpkg-proof",
+        "cd /tmp && rm -rf /tmp/pkg-proof",
         "uv sync --locked --all-groups",
         "uv remove httpx",
         "sed -n 5p Makefile",
@@ -182,7 +182,7 @@ def test_allows(command: str) -> None:
         # brief 002, acceptance criterion 2
         ("rm -rf ~/scratch", "outside"),
         ("rm -rf /", "outside"),
-        ("rm -r src/kitpkg", "tracked"),
+        ("rm -r src/pkg", "tracked"),
         ("rm -fr tests/test_skeleton.py", "tracked"),
         ("rm -f Makefile", "tracked"),
         ("rm Makefile", "tracked"),
@@ -339,7 +339,7 @@ def test_allows(command: str) -> None:
         ("cd /tmp; cd -; echo x > Makefile", "gate file"),
         ("cd /no/such/directory; echo x > Makefile", "gate file"),
         ("false && cd /tmp; sed -i '' s/a/b/ Makefile", "gate file"),
-        ("(cd /tmp && true); rm -r src/kitpkg", "tracked"),
+        ("(cd /tmp && true); rm -r src/pkg", "tracked"),
         # labels
         ("gh pr edit 5 --remove-label gates-approved", "the maintainer"),
         ("gh pr edit 5 --add-label=gates-approved", "the maintainer"),
@@ -676,8 +676,8 @@ def test_a_quoted_flag_in_the_message_is_not_a_flag() -> None:
 
 def test_relative_paths_are_resolved_against_the_shell_directory() -> None:
     in_src = replace(CTX, cwd=ROOT / "src")
-    assert "tracked" in (evaluate("rm -r kitpkg", in_src) or "")
-    assert evaluate("rm -r kitpkg", CTX) is None
+    assert "tracked" in (evaluate("rm -r pkg", in_src) or "")
+    assert evaluate("rm -r pkg", CTX) is None
     assert evaluate("echo x > ../Makefile", in_src) == guard_bash.GATE_MESSAGE
     assert evaluate("echo x > Makefile", in_src) is None
 
