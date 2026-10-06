@@ -317,8 +317,9 @@ def run(args: list[str], cwd: Path, check: bool = True) -> subprocess.CompletedP
 
 
 def tracked_files(root: Path) -> list[str]:
+    """The files git tracks that exist in the working tree (unstaged deletions are left out)."""
     out = run(["git", "ls-files", "-z"], root).stdout
-    return sorted(path for path in out.split("\0") if path)
+    return sorted(path for path in out.split("\0") if path and (root / path).is_file())
 
 
 def say(message: str) -> None:
@@ -392,6 +393,7 @@ def init(args: argparse.Namespace) -> int:
     paths = tracked_files(root)
     written = render_tree(root, root, answers, paths)
     write_lock(root, answers)
+    run(["git", "add", "-A"], root)  # staged: `git diff --cached` is all that init did
     say(
         f"rendered {len(written)} files for package {answers.package!r}, base {answers.base!r}, "
         f"prefix {answers.prefix!r}, maintainer {answers.maintainer!r}, Python {answers.python}"
@@ -429,9 +431,7 @@ def init(args: argparse.Namespace) -> int:
 
     print()
     print(f"Next steps for {answers.maintainer}:")
-    print(
-        "  1. Read the diff (`git status`, `git diff`), then commit it: `git add -A && git commit`."
-    )
+    print("  1. Read what init did (`git status`, `git diff --cached`), then commit it.")
     print("  2. Push; the first CI run compares against the root commit and should be green.")
     if not args.labels:
         print("  3. Create the labels: `python3 kit.py labels` (or --labels on init).")

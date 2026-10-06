@@ -286,6 +286,8 @@ def test_init_renders_seeds_removes_and_writes_the_lock(
     for path in seeded:
         assert path in present, path
     assert (copy_of_the_kit / "README.md").read_text("utf-8").startswith("# demo\n")
+    assert git(copy_of_the_kit, "diff", "--name-only") == ""  # everything init did is staged
+    assert "kit.lock" in git(copy_of_the_kit, "diff", "--cached", "--name-only")
     assert (copy_of_the_kit / "docs/FRICTION.md").read_text("utf-8").startswith("# Friction log\n")
 
     version, answers = kit.read_lock(copy_of_the_kit)
@@ -345,7 +347,6 @@ def test_init_refuses_an_invalid_package_a_dirty_tree_and_a_second_run(
     git(copy_of_the_kit, "checkout", "--", "README.md")
 
     assert kit_py(copy_of_the_kit, "init", "--package", "demo", "--no-sync").returncode == 0
-    git(copy_of_the_kit, "add", "-A")
     git(copy_of_the_kit, "commit", "-q", "-m", "init")
     again = kit_py(copy_of_the_kit, "init", "--package", "demo", "--no-sync")
     assert again.returncode == 2 and "initialised already" in again.stdout
