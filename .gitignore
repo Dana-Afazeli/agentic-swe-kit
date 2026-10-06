@@ -1,0 +1,22 @@
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+coverage.xml
+mutants/
+dist/
+
+# secrets and runtime state — never committed (runtime state lives outside the repo anyway)
+.env
+secrets.env
+*.log
+
+# local Claude Code settings (the committed .claude/settings.json is the shared one)
+.claude/settings.local.json
+
+# os
+.DS_Store
