@@ -4,11 +4,11 @@ name: ci
 
 on:
   pull_request:
-    branches: [main] # knob: base
+    branches: ["main"] # knob: base
     # labeled/unlabeled so gate-guard re-evaluates when `gates-approved` is added or removed
     types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
-    branches: [main] # knob: base
+    branches: ["main"] # knob: base
 
 permissions:
   contents: read

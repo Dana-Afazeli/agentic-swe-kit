@@ -37,7 +37,8 @@ def check_base(root: Path) -> None:
     base = knob(root, "scripts/stop_gate.py", "base")
     assert knob(root, "scripts/guard_bash.py", "base") == base
     ci = (root / ".github/workflows/ci.yml").read_text("utf-8")
-    assert re.findall(r"branches: \[([^\]]+)\] # knob: base", ci) == [base, base]
+    # quoted, so that YAML reads a branch named `1.10` or `true` as a string
+    assert re.findall(r'branches: \["([^"\]]+)"\] # knob: base', ci) == [base, base]
     assert f"Bash(gh pr create --base {base}:*)" in rules(root, "allow")
     for denied in (
         f"git push origin {base}",

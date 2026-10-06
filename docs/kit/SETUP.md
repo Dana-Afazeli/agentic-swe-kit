@@ -27,8 +27,13 @@ the guard's tests ask every installed shell, so both zsh and bash are fine.
    `init` seeds the project-owned files from `docs/templates/`, removes the kit-only files, writes
    `kit.lock`, runs `uv lock`, `uv sync --all-groups` and `make check`, and prints the next steps.
 3. `make prove` — every gate shown red on a planted defect on *your* machine (a few minutes).
-4. Commit and push. Open `README.md` (now your project's) and `docs/ROADMAP.md`; write the first
-   brief from `docs/briefs/000-TEMPLATE.md` as a draft PR.
+4. Commit, and push that commit **straight to the base branch** — the one time anything does. The
+   template commit is not yet your project: the integrity check compares with it and would show
+   the kit's own tests (`test_kit.py`, the renamed sample tests) as vanished in a PR, and the Stop
+   hook of a Claude Code session in that checkout would block for the same reason until the push.
+   So run `init` from a terminal, not inside a session; open the first session after the push.
+5. Open `README.md` (now your project's) and `docs/ROADMAP.md`; write the first brief from
+   `docs/briefs/000-TEMPLATE.md` as a draft PR. From here on, every change is a PR.
 
 Checkouts: develop in one clone; if the project runs something, run it from a second clone pinned to
 the base branch. Never two Claude Code sessions in one folder (`WORKFLOW.md`, "One session per

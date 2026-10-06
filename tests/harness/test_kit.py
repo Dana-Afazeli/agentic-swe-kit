@@ -18,6 +18,7 @@ import pytest
 from test_knobs import check_all
 
 import conftest
+import stop_gate
 from conftest import REPO_ROOT
 
 ROOT = REPO_ROOT
@@ -154,8 +155,8 @@ def test_every_seed_source_is_tracked_and_kit_only() -> None:
         ),
         (
             ".github/workflows/ci.yml",
-            "    branches: [main] # knob: base\n",
-            "    branches: [develop] # knob: base\n",
+            '    branches: ["main"] # knob: base\n',
+            '    branches: ["develop"] # knob: base\n',
         ),
         (".claude/settings.json", SETTINGS_BEFORE, SETTINGS_AFTER),
         ("AGENTS.md", PROSE_BEFORE, PROSE_AFTER),
@@ -231,12 +232,6 @@ def test_kit_owned_python_changes_only_on_knob_lines(answers: kit.Answers) -> No
         assert all("# knob:" in line for line in changed), (path, changed)
 
 
-def kit_marker() -> str:
-    import stop_gate
-
-    return stop_gate.REVIEWER_CLONE_VARIABLE
-
-
 def test_render_path_renames_the_sample_package_only() -> None:
     assert kit.render_path("src/kitpkg/core/text.py", ANSWERS) == "src/demo/core/text.py"
     assert kit.render_path("tests/test_text.py", ANSWERS) == "tests/test_text.py"
@@ -253,6 +248,8 @@ def test_render_path_renames_the_sample_package_only() -> None:
         ("package", "kit", "shadow"),  # kit.py and the gate scripts come first on pytest's path
         ("package", "review", "shadow"),
         ("package", "conftest", "shadow"),
+        ("package", "calendar", "shadow"),  # the standard library comes before src/ as well
+        ("package", "json", "shadow"),
         ("base", "a b", "not a branch name"),
         ("base", "a..b", "not a branch name"),  # git refuses it
         ("base", "x.lock", "not a branch name"),
@@ -437,7 +434,7 @@ def test_init_with_another_base_and_prefix_rewrites_the_rules(copy_of_the_kit: P
     assert '"Bash(gh pr create --base develop:*)"' in text(".claude/settings.json")
     assert 'BASE_BRANCH = "develop"  # knob: base' in text("scripts/stop_gate.py")
     assert 'BRANCH_PREFIX = "unit"  # knob: prefix' in text("scripts/review.py")
-    assert "branches: [develop] # knob: base" in text(".github/workflows/ci.yml")
+    assert 'branches: ["develop"] # knob: base' in text(".github/workflows/ci.yml")
     assert "`unit-NNN-slug`" in text("AGENTS.md")
     check_all(copy_of_the_kit)
 
@@ -505,7 +502,7 @@ def test_a_rendered_projects_harness_tests_pass_with_other_names(tmp_path: Path)
     modules = ["test_stop_gate.py", "test_review.py", "test_knobs.py", "test_gate_lists.py"]
     # with the reviewer-clone marker set, as in a reviewer's own `make check`: the fixture in the
     # rendered conftest removes it, so the Stop gate's tests there still see the gate
-    env = {**os.environ, kit_marker(): "1"}
+    env = {**os.environ, stop_gate.REVIEWER_CLONE_VARIABLE: "1"}
     result = subprocess.run(
         [
             sys.executable,
@@ -563,16 +560,35 @@ def test_inits_own_lines_come_before_the_output_of_the_tools_it_runs(
     assert "make is not installed" in out
 
 
-def test_no_sentence_points_at_a_command_this_kit_py_does_not_have(copy_of_the_kit: Path) -> None:
+def test_no_sentence_points_at_a_command_this_kit_py_does_not_have(
+    copy_of_the_kit: Path, tmp_path: Path
+) -> None:
     """A message that names `kit.py update` while the parser has no such command sends the reader
     to an argparse error (the resolved `make prove` thread, at other sites)."""
     usage = kit_py(copy_of_the_kit, "--help").stdout  # "{init,render,labels}" in the usage line
     match = re.search(r"\{([^}]+)\}", usage)
     assert match, usage
     choices = set(match[1].split(","))
-    assert kit_py(copy_of_the_kit, "init", "--package", "demo", "--no-sync").returncode == 0
+    first = kit_py(copy_of_the_kit, "init", "--package", "demo", "--no-sync")
+    assert first.returncode == 0
     git(copy_of_the_kit, "commit", "-q", "-m", "init")
     again = kit_py(copy_of_the_kit, "init", "--package", "demo", "--no-sync").stdout
+    labels = kit_py(copy_of_the_kit, "labels", env=path_with_only(tmp_path, "git")).stdout
     lock = (copy_of_the_kit / kit.LOCK).read_text("utf-8")
-    for named in re.findall(r"kit\.py (\w+)", again + lock):
+    for named in re.findall(r"kit\.py (\w+)", first.stdout + again + labels + lock):
         assert named in choices, (named, choices)
+    # and the next steps say where the init commit goes: straight to the base branch, because the
+    # template commit is not yet the project and a PR would show the kit's own tests as vanished
+    assert "straight to `main`" in first.stdout
+
+
+def test_init_and_render_work_in_a_linked_worktree(copy_of_the_kit: Path, tmp_path: Path) -> None:
+    """In a worktree (what `isolation: worktree` gives an agent), a submodule or a separate git
+    dir, `.git` is a file, not a directory; the check is for a repository, not for a folder."""
+    worktree = tmp_path / "worktree"
+    git(copy_of_the_kit, "worktree", "add", "-q", "-b", "wt", str(worktree))
+    assert (worktree / ".git").is_file()
+    rendered = kit_py(worktree, "render", "--package", "demo", "--into", str(tmp_path / "out"))
+    assert rendered.returncode == 0, rendered.stdout + rendered.stderr
+    initialised = kit_py(worktree, "init", "--package", "demo", "--no-sync")
+    assert initialised.returncode == 0, initialised.stdout + initialised.stderr

@@ -95,10 +95,10 @@ class Answers:
                 f"--package {self.package!r} is not a project name for uv: ASCII letters, digits "
                 "and underscores, starting with a letter and ending with a letter or digit"
             )
-        elif self.package in SHADOWED:
+        elif self.package in SHADOWED or self.package in sys.stdlib_module_names:
             problems.append(
                 f"--package {self.package!r} would shadow a module the tests import first "
-                f"(pytest's path puts kit.py and scripts/ before src/)"
+                f"(the standard library, kit.py and scripts/ come before src/)"
             )
         for name in ("base", "prefix"):
             value = getattr(self, name)
@@ -150,8 +150,8 @@ def is_branch_name(value: str) -> bool:
         result = subprocess.run(
             ["git", "check-ref-format", "--branch", value], capture_output=True, check=False
         )
-    except FileNotFoundError:  # no git: the rough shape has to do
-        return re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", value) is not None
+    except FileNotFoundError:  # no git: the shape was checked above (BRANCH_CHARACTERS)
+        return True
     return result.returncode == 0
 
 
@@ -263,6 +263,8 @@ def _knob_line(knob: str, replace: Callable[[str, Answers], str]) -> Rule:
 
 
 def _on_knob_base(line: str, a: Answers) -> str:
+    # `"main"` covers Python and ci.yml (`branches: ["main"]`: quoted, so YAML reads a branch
+    # named `1.10` or `true` as a string); `[main]` is kept for a bare YAML list
     line = re.sub(r'"main"', f'"{a.base}"', line)
     return re.sub(r"\[main\]", f"[{a.base}]", line)
 
@@ -480,7 +482,9 @@ def init(args: argparse.Namespace) -> int:
     if (root / LOCK).exists():
         say(f"{LOCK} exists: this project was initialised already")
         return 2
-    if not (root / ".git").is_dir() or not (root / "kit.py").is_file():
+    if (
+        not (root / ".git").exists() or not (root / "kit.py").is_file()
+    ):  # a worktree's .git is a file
         say("run init at the root of a clone of the kit (where kit.py and .git are)")
         return 2
     if run(["git", "status", "--porcelain"], root).stdout.strip():
@@ -524,7 +528,11 @@ def init(args: argparse.Namespace) -> int:
     run(["git", "add", "-A"], root)
 
     steps = ["Read what init did (`git status`, `git diff --cached`), then commit it."]
-    steps.append("Push; the first CI run compares against the root commit and should be green.")
+    steps.append(
+        f"Push that commit straight to `{answers.base}`, the one time anything does: the template "
+        "commit is not yet your project, and a PR would show the kit's own tests as vanished to "
+        "the integrity check. The first CI run compares with the root commit and should be green."
+    )
     if not args.labels:
         steps.append("Create the labels: `python3 kit.py labels` (or --labels on init).")
     if not args.hooks:
@@ -573,7 +581,9 @@ def render_command(args: argparse.Namespace) -> int:
     answers = answers_from(args)
     if answers is None:
         return 2
-    if not (root / ".git").is_dir() or not (root / "kit.py").is_file():
+    if (
+        not (root / ".git").exists() or not (root / "kit.py").is_file()
+    ):  # a worktree's .git is a file
         say("run render at the root of a clone of the kit (where kit.py and .git are)")
         return 2
     into = Path(args.into)
