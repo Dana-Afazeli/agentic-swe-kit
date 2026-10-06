@@ -4,13 +4,17 @@
     python3 kit.py init --package NAME [--maintainer NAME] [--base BRANCH] [--branch-prefix X]
                         [--python X.Y.Z] [--labels] [--hooks] [--no-sync]
     python3 kit.py render --package NAME ... --into DIR      (what init would write, elsewhere)
+    uv run python kit.py update [--to REF] [--from REF] [--no-sync]   (take a newer kit)
+    uv run python kit.py status                                       (where this project stands)
 
 Standard library only, so it runs before `uv` has made an environment. `init` runs once, in a
 fresh copy of the kit ("Use this template" on GitHub, then clone): it renders the placeholders,
 seeds the project-owned files, removes the kit-only ones, writes `kit.lock` (the answers and the
-kit version), re-locks and runs the gate. `update` (a later version of this file) renders the kit
-at the recorded version and at the new one with the same answers and three-way merges every
-kit-owned file; `render()` is shared, which is what makes that merge sound.
+kit version), re-locks and runs the gate. `update` fetches the kit, renders it at the recorded
+version and at the new one with the same answers, and three-way merges every kit-owned file
+(`git merge-file`): what the project never touched updates cleanly, its additions survive, a real
+collision is a conflict marker it lists. `render_text` is shared, which is what makes that merge
+sound (ADR-0007). `status` says where a project stands.
 
 The kit's own tree holds real default values, not templating syntax: package `kitpkg`, base branch
 `main`, branch prefix `main`, the maintainer as the phrase "the maintainer", Python 3.13.12. Each
@@ -25,14 +29,18 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import fnmatch
+import io
 import json
 import keyword
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
+import tomllib
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 KIT_VERSION = "0.1.0"
@@ -356,13 +364,35 @@ def toml_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def write_lock(root: Path, answers: Answers, version: str = KIT_VERSION) -> None:
+@dataclass(frozen=True)
+class Lock:
+    """What `kit.lock` records: the kit a project came from, and the answers it was rendered with.
+
+    `commit` is the kit commit the project's kit-owned files were rendered from — empty after
+    `init` from a template copy (GitHub squashes the kit's history), so `update` then starts from
+    the tag `v<version>`; `update` records the commit it moved to.
+    """
+
+    version: str
+    answers: Answers
+    repo: str = KIT_REPO
+    commit: str = ""
+
+
+def write_lock(
+    root: Path,
+    answers: Answers,
+    version: str = KIT_VERSION,
+    repo: str = KIT_REPO,
+    commit: str = "",
+) -> None:
     quoted = {f.name: toml_string(getattr(answers, f.name)) for f in fields(answers)}
     lines = [
         "# Written by `kit.py init`. Do not edit by hand.",
         "[kit]",
-        f"repo = {toml_string(KIT_REPO)}",
+        f"repo = {toml_string(repo)}",
         f"version = {toml_string(version)}",
+        f"commit = {toml_string(commit)}",
         f"date = {toml_string(dt.date.today().isoformat())}",
         "",
         "[answers]",
@@ -372,12 +402,15 @@ def write_lock(root: Path, answers: Answers, version: str = KIT_VERSION) -> None
     (root / LOCK).write_text("\n".join(lines), "utf-8")
 
 
-def read_lock(root: Path) -> tuple[str, Answers]:
-    import tomllib
-
+def read_lock(root: Path) -> Lock:
     data = tomllib.loads((root / LOCK).read_text("utf-8"))
     answers = Answers(**{f.name: str(data["answers"][f.name]) for f in fields(Answers)})
-    return str(data["kit"]["version"]), answers
+    return Lock(
+        version=str(data["kit"]["version"]),
+        answers=answers,
+        repo=str(data["kit"].get("repo", KIT_REPO)),
+        commit=str(data["kit"].get("commit", "")),
+    )
 
 
 # ----------------------------------------------------------------------------- git and shell
@@ -601,6 +634,347 @@ def labels_command(_args: argparse.Namespace) -> int:
     return create_labels(Path.cwd())
 
 
+# ----------------------------------------------------------------------------- update
+
+VERSION_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+
+
+class Refused(Exception):
+    """A call that cannot be right; the message says why. Nothing was changed."""
+
+
+def version_key(version: str) -> tuple[int, int, int] | None:
+    """`0.2.0` or `v0.2.0` -> (0, 2, 0); None for anything else (a branch, a sha)."""
+    match = VERSION_TAG.match(version if version.startswith("v") else f"v{version}")
+    return (int(match[1]), int(match[2]), int(match[3])) if match else None
+
+
+def fetch_kit(repo: str, into: Path) -> None:
+    result = run(["git", "clone", "--quiet", repo, str(into)], into.parent, check=False)
+    if result.returncode != 0:
+        raise Refused(f"the kit could not be fetched from {repo}: {result.stderr.strip()}")
+
+
+def kit_versions(clone: Path) -> list[str]:
+    """The release tags of the kit, oldest first."""
+    tags = run(["git", "tag", "--list", "v*"], clone).stdout.split()
+    return sorted(
+        (tag for tag in tags if VERSION_TAG.match(tag)), key=lambda t: version_key(t) or (0, 0, 0)
+    )
+
+
+def resolve(clone: Path, ref: str) -> str:
+    """The commit `ref` names in the kit, or Refused."""
+    result = run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], clone, check=False
+    )
+    if result.returncode != 0:
+        raise Refused(f"the kit has no ref {ref!r} (a tag such as v0.2.0, a branch, or a commit)")
+    return result.stdout.strip()
+
+
+def export(clone: Path, ref: str, into: Path) -> None:
+    """The kit's tree at `ref`, without its history."""
+    archive = subprocess.run(
+        ["git", "-C", str(clone), "archive", "--format=tar", ref], capture_output=True, check=True
+    )
+    into.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+        tar.extractall(into, filter="data")
+
+
+def files_under(root: Path) -> list[str]:
+    """Every file under `root`, repository-relative, sorted (an export has no git to ask)."""
+    return sorted(
+        str(p.relative_to(root)) for p in root.rglob("*") if p.is_file() and ".git" not in p.parts
+    )
+
+
+def kit_version_of(tree: Path) -> str:
+    """`KIT_VERSION` as the kit's own `kit.py` states it in that tree."""
+    match = re.search(r'^KIT_VERSION = "([^"]+)"', (tree / "kit.py").read_text("utf-8"), re.M)
+    return match[1] if match else "unknown"
+
+
+def changelog_between(text: str, old: str, new: str) -> str:
+    """The sections of CHANGELOG.md for the versions after `old` up to `new`, newest first."""
+    old_key, new_key = version_key(old), version_key(new)
+    sections: list[str] = []
+    current: str | None = None
+    for line in text.splitlines():
+        heading = re.match(r"^## v?(\d+\.\d+\.\d+)\b", line)
+        if line.startswith("## "):
+            key = version_key(heading[1]) if heading else None
+            current = line if key and old_key and new_key and old_key < key <= new_key else None
+            if current is not None:
+                sections.append(line)
+            continue
+        if current is not None:
+            sections.append(line)
+    return "\n".join(sections).strip()
+
+
+@dataclass
+class UpdatePlan:
+    """What `update` does to each managed path, decided before anything is written."""
+
+    merge: list[str] = field(default_factory=list)  # in both kits and the project: three-way
+    add: list[str] = field(default_factory=list)  # new in the kit, absent from the project
+    remove_clean: list[str] = field(default_factory=list)  # gone from the kit, project unchanged
+    remove_kept: list[str] = field(default_factory=list)  # gone from the kit, project changed it
+    missing: list[str] = field(default_factory=list)  # kit-owned, the project deleted it
+    blocked_add: list[str] = field(default_factory=list)  # new in the kit, project has another
+    unchanged: list[str] = field(default_factory=list)
+
+
+def _same(a: Path, b: Path) -> bool:
+    return a.read_bytes() == b.read_bytes()
+
+
+def plan_update(base: Path, theirs: Path, project: Path) -> UpdatePlan:
+    """`base` and `theirs`: the old and the new kit, rendered with the project's answers."""
+    plan = UpdatePlan()
+    managed = sorted({p for p in [*files_under(base), *files_under(theirs)] if is_managed(p)})
+    for path in managed:
+        in_base, in_theirs = (base / path).is_file(), (theirs / path).is_file()
+        in_project = (project / path).is_file()
+        if in_base and in_theirs:
+            if not in_project:
+                plan.missing.append(path)
+            elif _same(base / path, theirs / path) or _same(theirs / path, project / path):
+                plan.unchanged.append(path)
+            else:
+                plan.merge.append(path)
+        elif in_theirs:
+            if not in_project:
+                plan.add.append(path)
+            elif _same(theirs / path, project / path):
+                plan.unchanged.append(path)
+            else:
+                plan.blocked_add.append(path)
+        elif in_project:
+            (plan.remove_clean if _same(base / path, project / path) else plan.remove_kept).append(
+                path
+            )
+        else:
+            plan.unchanged.append(path)
+    return plan
+
+
+@dataclass
+class UpdateResult:
+    merged: list[str] = field(default_factory=list)
+    conflicts: list[str] = field(default_factory=list)
+    added: list[str] = field(default_factory=list)
+    removed: list[str] = field(default_factory=list)
+
+
+def apply_update(
+    plan: UpdatePlan, base: Path, theirs: Path, project: Path, old: str, new: str
+) -> UpdateResult:
+    """Write what the plan says. A merge with conflicts leaves the markers in the file and counts
+    it under `conflicts`; `git merge-file` exits with the number of conflicts, which is not an
+    error."""
+    result = UpdateResult()
+    for path in plan.merge:
+        merged = subprocess.run(
+            [
+                "git",
+                "merge-file",
+                *("-L", "yours", "-L", f"kit {old}", "-L", f"kit {new}"),
+                str(project / path),
+                str(base / path),
+                str(theirs / path),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if merged.returncode < 0:
+            raise Refused(f"git merge-file failed on {path}: {merged.stderr.strip()}")
+        (result.conflicts if merged.returncode else result.merged).append(path)
+    for path in plan.add:
+        (project / path).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(theirs / path, project / path)
+        result.added.append(path)
+    for path in plan.remove_clean:
+        (project / path).unlink()
+        result.removed.append(path)
+    return result
+
+
+def _render_export(clone: Path, ref: str, answers: Answers, work: Path, name: str) -> Path:
+    """The kit at `ref`, exported and rendered with `answers`, under `work/name`."""
+    raw, rendered = work / f"{name}-raw", work / name
+    export(clone, ref, raw)
+    paths = files_under(raw)
+    unknown = [p for p in paths if category(p) is None]
+    if unknown:
+        shown = ", ".join(unknown[:5]) + ("…" if len(unknown) > 5 else "")
+        say(
+            f"{len(unknown)} files of the kit at {ref} are unknown to this kit.py and were "
+            f"skipped; run update once more after it ({shown})"
+        )
+    render_tree(raw, rendered, answers, [p for p in paths if p not in unknown])
+    return rendered
+
+
+def _project_checks(root: Path) -> Lock:
+    if not (root / LOCK).is_file():
+        raise Refused(f"no {LOCK} here: update runs in a project made by `kit.py init`")
+    lock = read_lock(root)
+    if run(["git", "status", "--porcelain"], root).stdout.strip():
+        raise Refused(
+            "the working tree is not clean: commit or stash first, so the update is the diff"
+        )
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text("utf-8"))
+    if pyproject["project"]["name"] != lock.answers.package:
+        raise Refused(
+            f"{LOCK} says package {lock.answers.package!r}, pyproject.toml says "
+            f"{pyproject['project']['name']!r}: the lock was edited, or the project renamed; "
+            "fix the lock"
+        )
+    return lock
+
+
+def _print_list(title: str, paths: list[str]) -> None:
+    if paths:
+        print(f"{title}:")
+        for path in paths:
+            print(f"  {path}")
+
+
+def update(args: argparse.Namespace) -> int:
+    root = Path.cwd()
+    try:
+        lock = _project_checks(root)
+        branch = run(["git", "branch", "--show-current"], root).stdout.strip()
+        if branch == lock.answers.base:
+            raise Refused(
+                f"on the base branch {branch!r}: update on a branch of its own, so the result "
+                "is a PR"
+            )
+        with tempfile.TemporaryDirectory(prefix="kit-update-") as tmp:
+            work = Path(tmp)
+            clone = work / "kit"
+            fetch_kit(args.repo or lock.repo, clone)
+            versions = kit_versions(clone)
+            target = args.to or (versions[-1] if versions else None)
+            if target is None:
+                raise Refused("the kit has no release tag yet; pass --to <ref>")
+            target_sha = resolve(clone, target)
+            base_ref = args.from_ref or lock.commit or f"v{lock.version}"
+            try:
+                base_sha = resolve(clone, base_ref)
+            except Refused as error:
+                raise Refused(
+                    f"{error}; the base is what this project was rendered from — pass --from <ref>"
+                ) from error
+            if base_sha == target_sha:
+                say(f"already at {target} ({target_sha[:7]}); nothing to do")
+                return 0
+            theirs_raw_version = None
+            theirs = _render_export(clone, target_sha, lock.answers, work, "theirs")
+            theirs_raw_version = kit_version_of(work / "theirs-raw")
+            old_key, new_key = version_key(lock.version), version_key(theirs_raw_version)
+            if old_key and new_key and new_key < old_key:
+                raise Refused(
+                    f"the kit at {target} is version {theirs_raw_version}, older than the "
+                    f"{lock.version} this project has"
+                )
+            base = _render_export(clone, base_sha, lock.answers, work, "base")
+            plan = plan_update(base, theirs, root)
+            result = apply_update(plan, base, theirs, root, lock.version, theirs_raw_version)
+            write_lock(root, lock.answers, theirs_raw_version, args.repo or lock.repo, target_sha)
+            changelog = work / "theirs-raw" / "CHANGELOG.md"
+            notes = (
+                changelog_between(changelog.read_text("utf-8"), lock.version, theirs_raw_version)
+                if changelog.is_file()
+                else ""
+            )
+    except Refused as error:
+        say(str(error))
+        return 2
+    except Missing as error:
+        say(f"{error.program} is not installed")
+        return 2
+
+    run(["git", "add", "-A"], root)
+    say(
+        f"updated from {lock.version} ({(lock.commit or 'v' + lock.version)[:12]}) to "
+        f"{theirs_raw_version} ({target_sha[:7]}): {len(result.merged)} merged, "
+        f"{len(result.conflicts)} with conflicts, {len(result.added)} added, "
+        f"{len(result.removed)} removed"
+    )
+    _print_list("conflicts — resolve the markers, then `make check`", result.conflicts)
+    _print_list(
+        "kept: the kit removed these, you had changed them (delete or keep)", plan.remove_kept
+    )
+    _print_list("missing: kit-owned files you deleted (not recreated)", plan.missing)
+    _print_list("not added: new in the kit, you have another file there", plan.blocked_add)
+    if notes:
+        print()
+        print(notes)
+        print()
+
+    status = 1 if result.conflicts else 0
+    if not args.no_sync:
+        for command in (["uv", "lock"], ["uv", "sync", "--all-groups"], ["make", "check"]):
+            if not step(command, root):
+                say(f"{' '.join(command)} did not succeed: fix it, then `make check` again")
+                status = 1
+                break
+    run(["git", "add", "-A"], root)
+    steps: list[str] = []
+    if result.conflicts:
+        steps.append("Resolve the conflict markers listed above; `make check`.")
+    steps.append(
+        "Read the diff (`git diff --cached`), commit, push; `make prove` if the project has it."
+    )
+    steps.append("Open the PR: it touches gate files, so `gate-guard` waits for `gates-approved`.")
+    print()
+    print(f"Next steps for {lock.answers.maintainer}:")
+    for number, text in enumerate(steps, 1):
+        print(f"  {number}. {text}")
+    return status
+
+
+def status_command(args: argparse.Namespace) -> int:
+    root = Path.cwd()
+    try:
+        lock = _project_checks(root) if (root / LOCK).is_file() else None
+        if lock is None:
+            raise Refused(f"no {LOCK} here: this is not a project made by `kit.py init`")
+        with tempfile.TemporaryDirectory(prefix="kit-status-") as tmp:
+            work = Path(tmp)
+            clone = work / "kit"
+            fetch_kit(args.repo or lock.repo, clone)
+            versions = kit_versions(clone)
+            newest = versions[-1] if versions else "(no release tag)"
+            base_ref = lock.commit or f"v{lock.version}"
+            print(f"kit version: {lock.version} ({base_ref[:12]}); newest: {newest}")
+            base = _render_export(clone, resolve(clone, base_ref), lock.answers, work, "base")
+            changed = [
+                p
+                for p in files_under(base)
+                if is_managed(p)
+                and (
+                    ((root / p).is_file() and not _same(base / p, root / p))
+                    or not (root / p).is_file()
+                )
+            ]
+            _print_list("kit-owned files that differ from the kit you took", changed)
+            if not changed:
+                print("kit-owned files: as the kit rendered them")
+    except Refused as error:
+        say(str(error))
+        return 2
+    except Missing as error:
+        say(f"{error.program} is not installed")
+        return 2
+    return 0
+
+
 # ----------------------------------------------------------------------------- command line
 
 
@@ -653,6 +1027,30 @@ def parser() -> argparse.ArgumentParser:
 
     p_labels = sub.add_parser("labels", help="create the three labels with gh")
     p_labels.set_defaults(func=labels_command)
+
+    p_update = sub.add_parser(
+        "update", help="take a newer kit: three-way merge the kit-owned files"
+    )
+    p_update.add_argument(
+        "--to", default=None, help="the kit ref to move to (default: the newest release tag)"
+    )
+    p_update.add_argument(
+        "--from",
+        dest="from_ref",
+        default=None,
+        help="the kit ref this project was rendered from (default: the lock)",
+    )
+    p_update.add_argument("--repo", default=None, help="the kit repository (default: the lock)")
+    p_update.add_argument(
+        "--no-sync", action="store_true", help="skip uv lock, uv sync and make check"
+    )
+    p_update.set_defaults(func=update)
+
+    p_status = sub.add_parser(
+        "status", help="the kit version here, the newest, and what you changed"
+    )
+    p_status.add_argument("--repo", default=None, help="the kit repository (default: the lock)")
+    p_status.set_defaults(func=status_command)
     return top
 
 

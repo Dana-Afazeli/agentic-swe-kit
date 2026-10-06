@@ -287,7 +287,8 @@ def test_minor_versions() -> None:
 def test_the_lock_round_trips(tmp_path: Path, maintainer: str) -> None:
     answers = kit.Answers(**{**ANSWERS.__dict__, "maintainer": maintainer})
     kit.write_lock(tmp_path, answers)
-    version, read_back = kit.read_lock(tmp_path)
+    lock = kit.read_lock(tmp_path)
+    version, read_back = lock.version, lock.answers
     assert (version, read_back) == (kit.KIT_VERSION, answers)
     data = tomllib.loads((tmp_path / kit.LOCK).read_text("utf-8"))
     assert data["kit"]["repo"] == kit.KIT_REPO
@@ -401,7 +402,8 @@ def test_init_renders_seeds_removes_and_writes_the_lock(copy_of_the_kit: Path) -
     assert git(copy_of_the_kit, "diff", "--name-only") == ""  # everything init did is staged
     assert "kit.lock" in git(copy_of_the_kit, "diff", "--cached", "--name-only")
 
-    version, answers = kit.read_lock(copy_of_the_kit)
+    lock = kit.read_lock(copy_of_the_kit)
+    version, answers = lock.version, lock.answers
     assert version == kit.KIT_VERSION
     assert answers == kit.Answers(
         package="demo", base="main", prefix="main", maintainer="Ada Lovelace", python="3.13.12"
@@ -592,3 +594,251 @@ def test_init_and_render_work_in_a_linked_worktree(copy_of_the_kit: Path, tmp_pa
     assert rendered.returncode == 0, rendered.stdout + rendered.stderr
     initialised = kit_py(worktree, "init", "--package", "demo", "--no-sync")
     assert initialised.returncode == 0, initialised.stdout + initialised.stderr
+
+
+# ---------------------------------------------------------------------------- update
+
+
+def test_version_key_and_changelog_between() -> None:
+    assert kit.version_key("v0.2.0") == (0, 2, 0) and kit.version_key("0.10.3") == (0, 10, 3)
+    assert kit.version_key("main") is None and kit.version_key("v1.2") is None
+    changelog = (
+        "# Changelog\n\n## Unreleased\n\n- not yet\n\n## v0.3.0 — later\n\n- three\n\n"
+        "## v0.2.0 — 2026-10-07\n\n### Changed\n- ruff selects C4.\n\n## v0.1.0\n\n- one\n"
+    )
+    assert kit.changelog_between(changelog, "0.1.0", "0.2.0") == (
+        "## v0.2.0 — 2026-10-07\n\n### Changed\n- ruff selects C4."
+    )
+    assert "- three" in kit.changelog_between(changelog, "0.1.0", "0.3.0")
+    assert "not yet" not in kit.changelog_between(changelog, "0.0.1", "0.3.0")
+    assert kit.changelog_between(changelog, "0.2.0", "0.2.0") == ""
+
+
+@pytest.fixture(scope="module")
+def kit_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A kit repository with two releases: v0.1.0 (this tree) and v0.2.0 (a changed script, a new
+    document, a removed one, a changed lint rule, a changelog entry, the version bumped)."""
+    repo = tmp_path_factory.mktemp("kit") / "repo"
+    for path in kit.tracked_files(ROOT):
+        target = repo / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / path, target)
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "v0.1.0")
+    git(repo, "tag", "v0.1.0")
+
+    fmt_hook = repo / "scripts" / "fmt_hook.py"
+    fmt_hook.write_text(
+        fmt_hook.read_text("utf-8") + "\n# a line the kit added in 0.2.0\n", "utf-8"
+    )
+    (repo / "docs/kit/NEW.md").write_text(
+        "# New in 0.2.0\n\nFor kitpkg, by the maintainer.\n", "utf-8"
+    )
+    (repo / "docs/kit/research/2026-09-29-toolchain-and-claude-code.md").unlink()
+    pyproject = repo / "pyproject.toml"
+    old_select = 'select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]'
+    assert old_select in pyproject.read_text("utf-8")
+    pyproject.write_text(
+        pyproject.read_text("utf-8").replace(old_select, old_select[:-1] + ', "C4"]'), "utf-8"
+    )
+    kit_py_file = repo / "kit.py"
+    kit_py_file.write_text(
+        kit_py_file.read_text("utf-8").replace('KIT_VERSION = "0.1.0"', 'KIT_VERSION = "0.2.0"'),
+        "utf-8",
+    )
+    changelog = repo / "CHANGELOG.md"
+    changelog.write_text(
+        changelog.read_text("utf-8").replace(
+            "## Unreleased",
+            "## v0.2.0 — 2026-10-07\n\n### Changed\n- ruff selects C4.\n\n## Unreleased",
+        ),
+        "utf-8",
+    )
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "v0.2.0")
+    git(repo, "tag", "v0.2.0")
+    return repo
+
+
+def project_from(kit_repo: Path, where: Path, *answers: str) -> Path:
+    """A project made from the kit at v0.1.0 (`init --no-sync`), its lock pointing at `kit_repo`,
+    on a branch of its own as `update` wants it."""
+    kit.export(kit_repo, "v0.1.0", where)
+    git(where, "init", "-q", "-b", "main")
+    git(where, "add", "-A")
+    git(where, "commit", "-q", "-m", "Initial commit")
+    result = kit_py(where, "init", "--package", "demo", *answers, "--no-sync")
+    assert result.returncode == 0, result.stdout + result.stderr
+    lock = kit.read_lock(where)
+    kit.write_lock(where, lock.answers, lock.version, repo=str(kit_repo))
+    git(where, "add", "-A")
+    git(where, "commit", "-q", "-m", "init")
+    git(where, "switch", "-q", "-c", "main-kit-update")
+    return where
+
+
+def no_markers(root: Path) -> bool:
+    return not any(
+        "<<<<<<<" in (root / p).read_text("utf-8", errors="replace") for p in files_of(root)
+    )
+
+
+def test_update_merges_adds_removes_and_relocks(kit_repo: Path, tmp_path: Path) -> None:
+    project = project_from(kit_repo, tmp_path / "project")
+    pyproject = project / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text("utf-8").replace("dependencies = []", 'dependencies = ["httpx"]'),
+        "utf-8",
+    )
+    git(project, "commit", "-q", "-am", "a dependency of our own")
+
+    result = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    assert (
+        (project / "scripts/fmt_hook.py")
+        .read_text("utf-8")
+        .endswith("# a line the kit added in 0.2.0\n")
+    )
+    new = (project / "docs/kit/NEW.md").read_text("utf-8")
+    assert "demo" in new and "kitpkg" not in new  # rendered with the project's answers
+    assert not (project / "docs/kit/research/2026-09-29-toolchain-and-claude-code.md").exists()
+    merged = pyproject.read_text("utf-8")
+    assert '"C4"' in merged and 'dependencies = ["httpx"]' in merged  # both sides
+    assert no_markers(project)
+    lock = kit.read_lock(project)
+    assert lock.version == "0.2.0"
+    assert lock.commit == git(kit_repo, "rev-parse", "v0.2.0").strip()
+    assert git(project, "diff", "--name-only") == ""  # staged
+    assert "## v0.2.0" in result.stdout and "ruff selects C4" in result.stdout
+    assert "1 merged" in result.stdout or "merged" in result.stdout
+    assert "Next steps for the maintainer:" in result.stdout
+
+
+def test_update_keeps_a_local_edit_elsewhere_in_a_merged_file(
+    kit_repo: Path, tmp_path: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project")
+    fmt_hook = project / "scripts/fmt_hook.py"
+    lines = fmt_hook.read_text("utf-8").splitlines(keepends=True)
+    lines[0] = '"""Our own first line.\n'
+    fmt_hook.write_text("".join(lines), "utf-8")
+    git(project, "commit", "-q", "-am", "ours")
+
+    assert kit_py(project, "update", "--to", "v0.2.0", "--no-sync").returncode == 0
+    text = fmt_hook.read_text("utf-8")
+    assert text.startswith('"""Our own first line.\n') and text.endswith(
+        "# a line the kit added in 0.2.0\n"
+    )
+    assert "<<<<<<<" not in text
+
+
+def test_update_marks_a_collision_and_still_moves_the_lock(kit_repo: Path, tmp_path: Path) -> None:
+    project = project_from(kit_repo, tmp_path / "project")
+    fmt_hook = project / "scripts/fmt_hook.py"
+    fmt_hook.write_text(fmt_hook.read_text("utf-8") + "\n# our own last line\n", "utf-8")
+    git(project, "commit", "-q", "-am", "ours, at the end too")
+
+    result = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert result.returncode == 1, result.stdout + result.stderr
+    text = fmt_hook.read_text("utf-8")
+    assert "<<<<<<< yours" in text and ">>>>>>> kit 0.2.0" in text
+    assert "conflicts" in result.stdout and "scripts/fmt_hook.py" in result.stdout
+    assert "Resolve the conflict markers" in result.stdout
+    assert kit.read_lock(project).version == "0.2.0"
+
+
+def test_update_keeps_a_removed_file_the_project_changed_and_says_so(
+    kit_repo: Path, tmp_path: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project")
+    note = project / "docs/kit/research/2026-09-29-toolchain-and-claude-code.md"
+    note.write_text(note.read_text("utf-8") + "\nOur own addition.\n", "utf-8")
+    git(project, "commit", "-q", "-am", "ours")
+
+    result = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert result.returncode == 0
+    assert note.is_file()
+    assert "kept" in result.stdout and str(note.relative_to(project)) in result.stdout
+
+
+def test_update_does_not_recreate_a_kit_file_the_project_deleted(
+    kit_repo: Path, tmp_path: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project")
+    git(project, "rm", "-q", "docs/kit/SETUP.md")
+    git(project, "commit", "-q", "-m", "no setup doc here")
+
+    result = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert result.returncode == 0
+    assert not (project / "docs/kit/SETUP.md").exists()
+    assert "missing" in result.stdout and "docs/kit/SETUP.md" in result.stdout
+
+
+def test_update_merges_the_rendered_trees_not_the_raw_kit(kit_repo: Path, tmp_path: Path) -> None:
+    project = project_from(
+        kit_repo, tmp_path / "project", "--base", "develop", "--branch-prefix", "unit"
+    )
+    git(project, "switch", "-q", "-c", "unit-kit-update")
+    result = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert result.returncode == 0, result.stdout + result.stderr
+    settings = (project / ".claude/settings.json").read_text("utf-8")
+    assert (
+        '"Bash(git switch -c unit-:*)"' in settings
+        and '"Bash(gh pr create --base develop:*)"' in settings
+    )
+    assert no_markers(project)
+    check_all(project)
+
+
+def test_update_refuses_what_cannot_be_right(
+    kit_repo: Path, tmp_path: Path, copy_of_the_kit: Path
+) -> None:
+    assert kit_py(copy_of_the_kit, "update", "--no-sync").returncode == 2  # the kit, no lock
+    project = project_from(kit_repo, tmp_path / "project2")
+
+    unknown = kit_py(project, "update", "--to", "v9.9.9", "--no-sync")
+    assert unknown.returncode == 2 and "no ref 'v9.9.9'" in unknown.stdout
+
+    (project / "README.md").write_text("dirty\n", "utf-8")
+    dirty = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert dirty.returncode == 2 and "not clean" in dirty.stdout
+    git(project, "checkout", "--", "README.md")
+
+    git(project, "switch", "-q", "main")
+    on_base = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert on_base.returncode == 2 and "base branch" in on_base.stdout
+    git(project, "switch", "-q", "main-kit-update")
+
+    assert kit_py(project, "update", "--to", "v0.2.0", "--no-sync").returncode == 0
+    git(project, "commit", "-q", "-m", "updated")
+    older = kit_py(project, "update", "--to", "v0.1.0", "--no-sync")
+    assert older.returncode == 2 and "older than" in older.stdout
+    again = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert again.returncode == 0 and "nothing to do" in again.stdout
+
+    lock_file = project / kit.LOCK
+    lock_file.write_text(
+        lock_file.read_text("utf-8").replace('package = "demo"', 'package = "other"'), "utf-8"
+    )
+    git(project, "commit", "-q", "-am", "an edited lock")
+    mismatch = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert mismatch.returncode == 2 and "pyproject.toml says" in mismatch.stdout
+
+
+def test_status_names_the_versions_and_the_locally_changed_kit_files(
+    kit_repo: Path, tmp_path: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project")
+    clean = kit_py(project, "status")
+    assert clean.returncode == 0, clean.stdout + clean.stderr
+    assert "kit version: 0.1.0" in clean.stdout and "newest: v0.2.0" in clean.stdout
+    assert "as the kit rendered them" in clean.stdout
+
+    makefile = project / "Makefile"
+    makefile.write_text(makefile.read_text("utf-8") + "\n# ours\n", "utf-8")
+    git(project, "commit", "-q", "-am", "ours")
+    changed = kit_py(project, "status")
+    assert changed.returncode == 0
+    assert "Makefile" in changed.stdout and "differ from the kit" in changed.stdout
