@@ -566,12 +566,13 @@ def test_inits_own_lines_come_before_the_output_of_the_tools_it_runs(
 def test_no_sentence_points_at_a_command_this_kit_py_does_not_have(copy_of_the_kit: Path) -> None:
     """A message that names `kit.py update` while the parser has no such command sends the reader
     to an argparse error (the resolved `make prove` thread, at other sites)."""
-    commands = {action.dest for action in kit.parser()._actions}  # pyright: ignore[reportPrivateUsage]
-    sub = next(a for a in kit.parser()._actions if a.dest == "command")  # pyright: ignore[reportPrivateUsage]
-    choices = set(getattr(sub, "choices", {}) or {})
+    usage = kit_py(copy_of_the_kit, "--help").stdout  # "{init,render,labels}" in the usage line
+    match = re.search(r"\{([^}]+)\}", usage)
+    assert match, usage
+    choices = set(match[1].split(","))
     assert kit_py(copy_of_the_kit, "init", "--package", "demo", "--no-sync").returncode == 0
     git(copy_of_the_kit, "commit", "-q", "-m", "init")
     again = kit_py(copy_of_the_kit, "init", "--package", "demo", "--no-sync").stdout
     lock = (copy_of_the_kit / kit.LOCK).read_text("utf-8")
     for named in re.findall(r"kit\.py (\w+)", again + lock):
-        assert named in choices, (named, choices, commands)
+        assert named in choices, (named, choices)
