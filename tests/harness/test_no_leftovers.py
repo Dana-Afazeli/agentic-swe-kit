@@ -6,15 +6,15 @@ the decision records cite the source on purpose, and the lock file and the licen
 """
 
 import kit
+from test_kit import scan_for
 
-from conftest import REPO_ROOT, Leftovers
+from conftest import REPO_ROOT
 
 SOURCE_TOKENS = (
     "centcom",
-    "CENTCOM",
-    "Dana",
-    "TahamTan",
-    "Telegram",
+    "dana",
+    "tahamtan",
+    "telegram",
     "aiogram",
     "claude_agent_sdk",
     "v2-",
@@ -30,6 +30,7 @@ CITES_THE_SOURCE = (
 )
 
 
-def test_no_source_project_token_remains(leftovers: Leftovers) -> None:
+def test_no_source_project_token_remains() -> None:
+    """Case-insensitive and inside identifiers too: `test_x_dana_approved` is a leftover."""
     tracked = kit.tracked_files(REPO_ROOT)
-    assert leftovers(REPO_ROOT, tracked, SOURCE_TOKENS, CITES_THE_SOURCE) == []
+    assert scan_for(REPO_ROOT, tracked, SOURCE_TOKENS, CITES_THE_SOURCE) == []

@@ -6,6 +6,7 @@ template" on GitHub hands a new project. Kit-only: the kit's tree is what it tes
 
 import fnmatch
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -17,7 +18,7 @@ import pytest
 from test_knobs import check_all
 
 import conftest
-from conftest import REPO_ROOT, Leftovers
+from conftest import REPO_ROOT
 
 ROOT = REPO_ROOT
 ANSWERS = kit.Answers(
@@ -62,6 +63,24 @@ PROSE_AFTER = (
     "reads; Ada Lovelace's label. def main(): demo.main, DEMO_EVAL_BUDGET_USD, origin/develop,\n"
     "unit-001-x\n"
 )
+
+
+def scan_for(
+    root: Path, paths: list[str], tokens: tuple[str, ...], allow: tuple[str, ...]
+) -> list[str]:
+    """`path:line: token` for every token found in a file not covered by `allow` — in any case and
+    inside identifiers too (a token inside a test name is a leftover). URLs are stripped first: the
+    kit's own address names its owner."""
+    found: list[str] = []
+    lowered = [token.lower() for token in tokens]
+    for path in paths:
+        if any(fnmatch.fnmatchcase(path, pattern) for pattern in allow):
+            continue
+        text = re.sub(r"https?://\S+", "", (root / path).read_text("utf-8", errors="replace"))
+        for number, line in enumerate(text.splitlines(), 1):
+            low = line.lower()
+            found.extend(f"{path}:{number}: {token}" for token in lowered if token in low)
+    return found
 
 
 # ---------------------------------------------------------------------------- ownership
@@ -212,6 +231,12 @@ def test_kit_owned_python_changes_only_on_knob_lines(answers: kit.Answers) -> No
         assert all("# knob:" in line for line in changed), (path, changed)
 
 
+def kit_marker() -> str:
+    import stop_gate
+
+    return stop_gate.REVIEWER_CLONE_VARIABLE
+
+
 def test_render_path_renames_the_sample_package_only() -> None:
     assert kit.render_path("src/kitpkg/core/text.py", ANSWERS) == "src/demo/core/text.py"
     assert kit.render_path("tests/test_text.py", ANSWERS) == "tests/test_text.py"
@@ -231,7 +256,14 @@ def test_render_path_renames_the_sample_package_only() -> None:
         ("base", "a b", "not a branch name"),
         ("base", "a..b", "not a branch name"),  # git refuses it
         ("base", "x.lock", "not a branch name"),
+        ("base", 'a"b', "not a branch name"),  # git accepts; a Python string and JSON would not
+        ("base", "a,b", "not a branch name"),  # git accepts; YAML's [a,b] is two branches
+        ("base", "rel$(id)", "not a branch name"),
         ("prefix", "-x", "not a branch name"),
+        ("prefix", "develop/unit", "under the base"),  # git cannot create develop/unit-001
+        ("package", "_demo", "project name"),  # a Python identifier, not a project name for uv
+        ("package", "demo_", "project name"),
+        ("package", "café", "project name"),
         ("python", "3.13", "not X.Y.Z"),
         ("maintainer", " ", "empty"),
         ("maintainer", 'Sam "S"', "quote"),  # the name lands inside echo "…" lines of ci.yml
@@ -336,9 +368,7 @@ def path_with_only(tmp_path: Path, *programs: str) -> dict[str, str]:
     return {**os.environ, "PATH": str(bin_dir)}
 
 
-def test_init_renders_seeds_removes_and_writes_the_lock(
-    copy_of_the_kit: Path, leftovers: Leftovers
-) -> None:
+def test_init_renders_seeds_removes_and_writes_the_lock(copy_of_the_kit: Path) -> None:
     result = kit_py(
         copy_of_the_kit, "init", "--package", "demo", "--maintainer", "Ada Lovelace", "--no-sync"
     )
@@ -387,10 +417,9 @@ def test_init_renders_seeds_removes_and_writes_the_lock(
 
     scanned = [p for p in present if p != kit.LOCK]
     verbatim = ("uv.lock", *kit.VERBATIM)  # re-locked; the tool's own constants
-    assert leftovers(copy_of_the_kit, scanned, ("kitpkg", "KITPKG"), verbatim) == []
+    assert scan_for(copy_of_the_kit, scanned, ("kitpkg",), verbatim) == []
     # the maintainer's name is in the documents and rules; hook messages keep the role phrase
-    phrase = ("the maintainer", "The maintainer")
-    assert leftovers(copy_of_the_kit, scanned, phrase, (*verbatim, "*.py")) == []
+    assert scan_for(copy_of_the_kit, scanned, ("the maintainer",), (*verbatim, "*.py")) == []
     check_all(copy_of_the_kit)  # every knob's sites agree in the project too
     assert "Next steps for Ada Lovelace:" in result.stdout
     assert "make prove" not in result.stdout  # no such target yet (brief 003)
@@ -474,6 +503,9 @@ def test_a_rendered_projects_harness_tests_pass_with_other_names(tmp_path: Path)
     # the modules whose data names a branch or reads a knob; the guard's 600 cases and the
     # integrity tests build their own repositories and are not worth the 20 s here
     modules = ["test_stop_gate.py", "test_review.py", "test_knobs.py", "test_gate_lists.py"]
+    # with the reviewer-clone marker set, as in a reviewer's own `make check`: the fixture in the
+    # rendered conftest removes it, so the Stop gate's tests there still see the gate
+    env = {**os.environ, kit_marker(): "1"}
     result = subprocess.run(
         [
             sys.executable,
@@ -489,5 +521,57 @@ def test_a_rendered_projects_harness_tests_pass_with_other_names(tmp_path: Path)
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
     assert result.returncode == 0, result.stdout[-3000:] + result.stderr[-1000:]
+
+
+def test_render_refuses_the_kit_itself_and_a_folder_without_a_repository(
+    copy_of_the_kit: Path, tmp_path: Path
+) -> None:
+    before = files_of(copy_of_the_kit)
+    into_self = kit_py(copy_of_the_kit, "render", "--package", "demo", "--into", ".")
+    assert into_self.returncode == 2 and "into the kit itself" in into_self.stdout
+    into_sub = kit_py(copy_of_the_kit, "render", "--package", "demo", "--into", "out")
+    assert into_sub.returncode == 2 and "into the kit itself" in into_sub.stdout
+    assert (
+        files_of(copy_of_the_kit) == before and git(copy_of_the_kit, "status", "--porcelain") == ""
+    )
+
+    alone = tmp_path / "alone"
+    alone.mkdir()
+    shutil.copyfile(ROOT / "kit.py", alone / "kit.py")
+    result = kit_py(alone, "render", "--package", "demo", "--into", str(tmp_path / "out"))
+    assert result.returncode == 2 and "Traceback" not in result.stderr
+    assert "clone of the kit" in result.stdout
+
+
+def test_inits_own_lines_come_before_the_output_of_the_tools_it_runs(
+    copy_of_the_kit: Path, tmp_path: Path
+) -> None:
+    """`say()` flushes: with stdout redirected to a file — the saved proof the PR template asks
+    for — the line that names a step stands before that step's output, not after it."""
+    env = path_with_only(tmp_path, "git")
+    fake_uv = tmp_path / "bin" / "uv"
+    fake_uv.write_text('#!/bin/sh\necho "FAKE-UV $*"\n', "utf-8")
+    fake_uv.chmod(0o755)
+    result = kit_py(copy_of_the_kit, "init", "--package", "demo", env=env)
+    assert result.returncode == 1, result.stdout + result.stderr  # make is not installed
+    out = result.stdout
+    assert out.index("kit: uv lock") < out.index("FAKE-UV lock")
+    assert out.index("FAKE-UV lock") < out.index("kit: uv sync")
+    assert "make is not installed" in out
+
+
+def test_no_sentence_points_at_a_command_this_kit_py_does_not_have(copy_of_the_kit: Path) -> None:
+    """A message that names `kit.py update` while the parser has no such command sends the reader
+    to an argparse error (the resolved `make prove` thread, at other sites)."""
+    commands = {action.dest for action in kit.parser()._actions}  # pyright: ignore[reportPrivateUsage]
+    sub = next(a for a in kit.parser()._actions if a.dest == "command")  # pyright: ignore[reportPrivateUsage]
+    choices = set(getattr(sub, "choices", {}) or {})
+    assert kit_py(copy_of_the_kit, "init", "--package", "demo", "--no-sync").returncode == 0
+    git(copy_of_the_kit, "commit", "-q", "-m", "init")
+    again = kit_py(copy_of_the_kit, "init", "--package", "demo", "--no-sync").stdout
+    lock = (copy_of_the_kit / kit.LOCK).read_text("utf-8")
+    for named in re.findall(r"kit\.py (\w+)", again + lock):
+        assert named in choices, (named, choices, commands)

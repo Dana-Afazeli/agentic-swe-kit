@@ -125,7 +125,7 @@ def test_weakened_test_blocks_and_names_the_label(
     "labels",
     ["checks-weakened-approved\n", "brief-approved\nchecks-weakened-approved\ngates-approved\n"],
 )
-def test_a_weakened_test_dana_approved_lets_the_session_stop(
+def test_a_weakened_test_the_maintainer_approved_lets_the_session_stop(
     labels: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The label on the branch's PR is the maintainer's answer; the hook reads it as CI does."""

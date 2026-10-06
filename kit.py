@@ -90,6 +90,11 @@ class Answers:
             )
         elif self.package != self.package.lower():
             problems.append(f"--package {self.package!r}: use lowercase (PEP 8 package names)")
+        elif not re.fullmatch(r"[a-z]([a-z0-9_]*[a-z0-9])?", self.package):
+            problems.append(
+                f"--package {self.package!r} is not a project name for uv: ASCII letters, digits "
+                "and underscores, starting with a letter and ending with a letter or digit"
+            )
         elif self.package in SHADOWED:
             problems.append(
                 f"--package {self.package!r} would shadow a module the tests import first "
@@ -100,6 +105,11 @@ class Answers:
             if not is_branch_name(value):
                 option = "branch-prefix" if name == "prefix" else name
                 problems.append(f"--{option} {value!r} is not a branch name")
+        if self.prefix.startswith(self.base + "/"):
+            problems.append(
+                f"--branch-prefix {self.prefix!r} is under the base branch's name: git cannot "
+                f"create {self.prefix}-001-slug while {self.base} exists"
+            )
         if not re.fullmatch(r"\d+\.\d+\.\d+", self.python):
             problems.append(f"--python {self.python!r} is not X.Y.Z")
         if not self.maintainer.strip():
@@ -126,9 +136,15 @@ SHADOWED = frozenset(
 )
 
 
+# What a branch name may hold here: git accepts more (`"`, `,`, `$`, `(`, `)`, `{`, `}`), and the
+# name lands in a Python string, in JSON rule texts and in a YAML flow list, where those break.
+BRANCH_CHARACTERS = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
+
+
 def is_branch_name(value: str) -> bool:
-    """What git accepts as a branch name (`a..b`, `x.lock`, a space: refused), asked of git."""
-    if not value or value.startswith("-"):
+    """What git accepts as a branch name (`a..b`, `x.lock`, a space: refused), asked of git, and
+    what the rendered files can hold (BRANCH_CHARACTERS)."""
+    if not value or value.startswith("-") or not BRANCH_CHARACTERS.fullmatch(value):
         return False
     try:
         result = subprocess.run(
@@ -341,7 +357,7 @@ def toml_string(value: str) -> str:
 def write_lock(root: Path, answers: Answers, version: str = KIT_VERSION) -> None:
     quoted = {f.name: toml_string(getattr(answers, f.name)) for f in fields(answers)}
     lines = [
-        "# Written by `kit.py init`, rewritten by `kit.py update`. Do not edit by hand.",
+        "# Written by `kit.py init`. Do not edit by hand.",
         "[kit]",
         f"repo = {toml_string(KIT_REPO)}",
         f"version = {toml_string(version)}",
@@ -398,7 +414,7 @@ def tracked_files(root: Path) -> list[str]:
 
 
 def say(message: str) -> None:
-    print(f"kit: {message}")
+    print(f"kit: {message}", flush=True)  # redirected to a file, a step's output follows its line
 
 
 # ----------------------------------------------------------------------------- init
@@ -462,7 +478,7 @@ def init(args: argparse.Namespace) -> int:
     if answers is None:
         return 2
     if (root / LOCK).exists():
-        say(f"{LOCK} exists: this project was initialised already (kit.py update takes updates)")
+        say(f"{LOCK} exists: this project was initialised already")
         return 2
     if not (root / ".git").is_dir() or not (root / "kit.py").is_file():
         say("run init at the root of a clone of the kit (where kit.py and .git are)")
@@ -557,7 +573,13 @@ def render_command(args: argparse.Namespace) -> int:
     answers = answers_from(args)
     if answers is None:
         return 2
+    if not (root / ".git").is_dir() or not (root / "kit.py").is_file():
+        say("run render at the root of a clone of the kit (where kit.py and .git are)")
+        return 2
     into = Path(args.into)
+    if into.resolve() == root.resolve() or root.resolve() in into.resolve().parents:
+        say(f"--into {args.into!r} is into the kit itself: render writes somewhere else")
+        return 2
     into.mkdir(parents=True, exist_ok=True)
     written = render_tree(root, into, answers, tracked_files(root))
     write_lock(into, answers)
@@ -627,7 +649,11 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     func: Callable[[argparse.Namespace], int] = args.func
-    return func(args)
+    try:
+        return func(args)
+    except Missing as error:
+        say(f"{error.program} is not installed")
+        return 2
 
 
 if __name__ == "__main__":
