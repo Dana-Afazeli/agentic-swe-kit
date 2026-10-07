@@ -26,7 +26,8 @@ moves to.
   reads each kit version with its own `kit.py` (the target's runs the update when it differs from
   the project's; `kit.py` itself is merged like every kit-owned file); "behind" is the history's
   order (`git merge-base --is-ancestor`), not the version string's; `--to` takes any ref, a branch
-  included; a symbolic link at a kit-owned path is left alone and listed. `kit.py status [--from REF]`: the version here, the newest tag, the
+  included; a kit-owned path that is, or lies under, a symbolic link is left alone
+  and listed. `kit.py status [--from REF]`: the version here, the newest tag, the
   kit-owned files that differ from the kit as rendered.
 - The Stop hook stands aside in a reviewer's clone: `scripts/review.py` marks its processes with
   `KIT_REVIEWER_CLONE=1`. Both reviewers of PR 1 had run to their time limits, blocked by the
