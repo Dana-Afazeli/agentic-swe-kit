@@ -22,8 +22,11 @@ moves to.
 - `kit.py update [--to REF] [--from REF] [--repo URL] [--no-sync]`: the three-way merge of the
   kit-owned and mixed files between the kit version a project has and a newer one, both rendered
   with the project's answers (ADR-0007); conflicts stay as markers and are listed; the lock records
-  version and commit; the changelog between the versions is printed. `kit.py status`: the version
-  here, the newest tag, the kit-owned files that differ from the kit as rendered.
+  version, commit and repository; the changelog between the versions is printed. The command
+  takes the newer kit's `kit.py` first and re-runs it, so the newer manifest decides; "behind" is
+  the history's order (`git merge-base --is-ancestor`), not the version string's; `--to` takes any
+  ref, a branch included. `kit.py status [--from REF]`: the version here, the newest tag, the
+  kit-owned files that differ from the kit as rendered.
 - The Stop hook stands aside in a reviewer's clone: `scripts/review.py` marks its processes with
   `KIT_REVIEWER_CLONE=1`. Both reviewers of PR 1 had run to their time limits, blocked by the
   branch's own renamed tests, with their reports written and unposted.
