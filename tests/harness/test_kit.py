@@ -686,6 +686,27 @@ def kit_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     fmt_hook.write_text(fmt_hook.read_text("utf-8") + "# after v0.3.0\n", "utf-8")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "after v0.3.0")
+    # two branches for what an update must refuse or do: `side`, off v0.1.0 with a lower
+    # KIT_VERSION (older by version, not an ancestor); `drop`, off v0.3.0, where the kit removes
+    # `extras/tool.txt` and the pattern that named it
+    git(repo, "switch", "-q", "-c", "side", "v0.1.0")
+    kit_py_file.write_text(
+        kit_py_file.read_text("utf-8").replace('KIT_VERSION = "0.1.0"', 'KIT_VERSION = "0.0.9"'),
+        "utf-8",
+    )
+    git(repo, "commit", "-q", "-am", "side: an older version")
+    git(repo, "switch", "-q", "-c", "drop", "v0.3.0")
+    (repo / "extras/tool.txt").unlink()
+    kit_py_file.write_text(
+        kit_py_file.read_text("utf-8")
+        .replace('KIT_VERSION = "0.3.0"', 'KIT_VERSION = "0.4.0"')
+        .replace('    "extras/*",\n', ""),
+        "utf-8",
+    )
+    assert '"extras/*"' not in kit_py_file.read_text("utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "drop: the extras are gone, pattern and file")
+    git(repo, "switch", "-q", "main")
     return repo
 
 
@@ -761,8 +782,8 @@ def test_update_merges_adds_removes_and_relocks(
     assert lock.commit == git(kit_repo, "rev-parse", "v0.2.0").strip()
     assert git(project, "diff", "--name-only") == ""  # staged
     assert "## v0.2.0" in result.stdout and "ruff selects C4" in result.stdout
-    # kit.py arrives by the hand-over, not by a merge: fmt_hook.py and pyproject.toml merge
-    assert "2 merged, 0 with conflicts, 1 added, 1 removed" in result.stdout
+    # kit.py (the version line), fmt_hook.py and pyproject.toml merge
+    assert "3 merged, 0 with conflicts, 1 added, 1 removed" in result.stdout
     assert "Next steps for the maintainer:" in result.stdout
 
 
@@ -868,7 +889,7 @@ def test_update_refuses_what_cannot_be_right(
     assert kit_py(project, "update", "--to", "v0.2.0", "--no-sync").returncode == 0
     git(project, "commit", "-q", "-m", "updated")
     older = kit_py(project, "update", "--to", "v0.1.0", "--no-sync")
-    assert older.returncode == 2 and ("behind" in older.stdout or "older than" in older.stdout)
+    assert older.returncode == 2 and "behind what this project has" in older.stdout
     again = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
     assert again.returncode == 0 and "nothing to do" in again.stdout
 
@@ -912,8 +933,8 @@ def test_update_takes_the_newer_kit_py_first_and_its_manifest_decides(
     project = project_from(kit_repo, tmp_path / "project", templates)
     result = kit_py(project, "update", "--to", "v0.3.0", "--no-sync")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "took the newer kit.py first" in result.stdout
-    assert "unknown to this kit.py" not in result.stdout
+    assert "it runs this update" in result.stdout
+    assert "unknown to" not in result.stdout
     assert (project / "extras/tool.txt").read_text("utf-8") == "a kit-owned extra for demo\n"
     assert kit.read_lock(project).version == "0.3.0"
     assert "0.3.0" in (project / "kit.py").read_text("utf-8")
@@ -1029,10 +1050,11 @@ def test_files_under_ignores_only_the_trees_own_git(tmp_path: Path) -> None:
 
 
 def test_python_version_problem_is_a_sentence_below_the_minimum() -> None:
-    assert kit.python_version_problem(3, 10) is not None
-    assert "3.11" in (kit.python_version_problem(3, 9) or "")
-    assert kit.python_version_problem(3, 11) is None
-    assert kit.python_version_problem(3, 13) is None
+    assert kit.python_version_problem(3, 10, 12) is not None
+    assert "3.11.4" in (kit.python_version_problem(3, 9, 6) or "")
+    assert kit.python_version_problem(3, 11, 3) is not None  # tarfile's filter came in 3.11.4
+    assert kit.python_version_problem(3, 11, 4) is None
+    assert kit.python_version_problem(3, 13, 12) is None
 
 
 def test_kit_py_imports_the_standard_library_only() -> None:
@@ -1051,7 +1073,101 @@ def test_kit_py_imports_the_standard_library_only() -> None:
     )
 
 
-def testwithout_option_drops_the_flag_in_both_spellings() -> None:
+def test_without_option_drops_the_flag_in_both_spellings() -> None:
     argv = ["--to", "v0.2.0", "--repo", "../kit", "--no-sync", "--repo=../other"]
     assert kit.without_option(argv, "--repo") == ["--to", "v0.2.0", "--no-sync"]
     assert kit.without_option(["--repo"], "--repo") == []
+
+
+# ---------------------------------------------------------------------------- update, round 3
+
+
+def test_update_removes_a_file_whose_pattern_the_newer_kit_dropped(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    """v0.3.0 brought `extras/tool.txt` under a pattern of its own kit.py; `drop` removes both. The
+    base must be read with the manifest of the kit it came from, not the newer one (round 2 of the
+    review: the file stayed, "0 removed", and `status` called the tree clean)."""
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    assert kit_py(project, "update", "--to", "v0.3.0", "--no-sync").returncode == 0
+    git(project, "commit", "-q", "-m", "at v0.3.0")
+    assert (project / "extras/tool.txt").is_file()
+    result = kit_py(project, "update", "--to", "drop", "--no-sync")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "1 removed" in result.stdout and not (project / "extras/tool.txt").exists()
+    assert kit.read_lock(project).version == "0.4.0"
+
+
+def test_a_refused_update_leaves_the_tree_as_it_was(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    """`side` is older by version and not an ancestor: refused as "older than" before anything is
+    written, so the tree stays clean (round 2: kit.py had been replaced before the refusal)."""
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    result = kit_py(project, "update", "--to", "side", "--no-sync")
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "older than" in result.stdout
+    assert git(project, "status", "--porcelain") == ""
+
+
+def test_a_local_edit_of_kit_py_is_merged_like_any_kit_owned_file(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    kit_py_file = project / "kit.py"
+    kit_py_file.write_text(kit_py_file.read_text("utf-8") + "\n# our own note in kit.py\n", "utf-8")
+    git(project, "commit", "-q", "-am", "a note in kit.py")
+    result = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert result.returncode == 0, result.stdout + result.stderr
+    text = kit_py_file.read_text("utf-8")
+    assert "# our own note in kit.py" in text and 'KIT_VERSION = "0.2.0"' in text
+    assert no_markers(project)
+
+
+def test_update_needs_a_git_repository_and_status_does_not(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    shutil.rmtree(project / ".git")
+    status = kit_py(project, "status")
+    assert status.returncode == 0, status.stdout + status.stderr
+    assert "kit version: 0.1.0" in status.stdout
+    update = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert update.returncode == 2 and "not a git repository" in update.stdout
+    assert "Traceback" not in update.stderr
+
+
+def test_status_refuses_a_from_ref_the_kit_lacks_and_names_a_lost_commit(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    typed = kit_py(project, "status", "--from", "nosuchref")
+    assert typed.returncode == 2 and "no ref 'nosuchref'" in typed.stdout
+    lock = kit.read_lock(project)
+    lost_commit = "0123456789abcdef0123456789abcdef01234567"
+    kit.write_lock(project, lock.answers, lock.version, repo=lock.repo, commit=lost_commit)
+    git(project, "commit", "-q", "-am", "a lock whose commit the kit does not hold")
+    lost = kit_py(project, "status")
+    assert lost.returncode == 0, lost.stdout + lost.stderr
+    assert "kit version: 0.1.0 (0123456789ab)" in lost.stdout
+    assert "is not in the kit" in lost.stdout and "first release" not in lost.stdout
+
+
+def test_a_kit_owned_path_that_is_a_link_is_left_alone_and_listed(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    """`git merge-file` would write through the link into a file outside the project, where the PR
+    the update becomes does not show it."""
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    outside = tmp_path / "outside.py"
+    hook = project / "scripts/fmt_hook.py"
+    outside.write_bytes(hook.read_bytes())
+    hook.unlink()
+    hook.symlink_to(outside)
+    git(project, "add", "-A")
+    git(project, "commit", "-q", "-m", "the hook is a link")
+    before = outside.read_bytes()
+    result = kit_py(project, "update", "--to", "v0.2.0", "--no-sync")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert outside.read_bytes() == before and hook.is_symlink()
+    assert "not touched" in result.stdout and "scripts/fmt_hook.py" in result.stdout

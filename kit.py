@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import fnmatch
+import importlib.util
 import io
 import json
 import keyword
@@ -40,7 +41,7 @@ import sys
 import tarfile
 import tempfile
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -359,14 +360,14 @@ def render_path(path: str, answers: Answers) -> str:
 # ----------------------------------------------------------------------------- the lock
 
 
-MIN_PYTHON = (3, 11)  # tomllib (the lock), sys.stdlib_module_names (validation)
+MIN_PYTHON = (3, 11, 4)  # tomllib, sys.stdlib_module_names, tarfile's extraction filter (3.11.4)
 
 
-def python_version_problem(major: int, minor: int) -> str | None:
-    if (major, minor) < MIN_PYTHON:
+def python_version_problem(major: int, minor: int, micro: int) -> str | None:
+    if (major, minor, micro) < MIN_PYTHON:
         return (
-            f"kit.py needs Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]} or later; this is "
-            f"{major}.{minor}. `uv python install` gives the project's own, or run "
+            f"kit.py needs Python {'.'.join(map(str, MIN_PYTHON))} or later; this is "
+            f"{major}.{minor}.{micro}. `uv python install` gives the project's own, or run "
             "`uv run python kit.py …` once the environment exists"
         )
     return None
@@ -668,7 +669,6 @@ def labels_command(_args: argparse.Namespace) -> int:
 # ----------------------------------------------------------------------------- update
 
 VERSION_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
-HANDOVER_VARIABLE = "KIT_UPDATE_HANDOVER"  # set once `update` has taken the newer kit.py and re-run
 HALF_UPDATED = (
     "the tree is half updated; it was clean before: `git checkout -- . && git clean -fd` "
     "takes it back, then run update again"
@@ -778,6 +778,7 @@ class UpdatePlan:
     remove_kept: list[str] = field(default_factory=list)  # gone from the kit, project changed it
     missing: list[str] = field(default_factory=list)  # kit-owned, the project deleted it
     blocked_add: list[str] = field(default_factory=list)  # new in the kit, project has another
+    linked: list[str] = field(default_factory=list)  # a symbolic link in the project: left alone
     unchanged: list[str] = field(default_factory=list)
 
 
@@ -785,12 +786,15 @@ def _same(a: Path, b: Path) -> bool:
     return a.read_bytes() == b.read_bytes()
 
 
-def plan_update(base: Path, theirs: Path, project: Path) -> UpdatePlan:
-    """`base` and `theirs`: the old and the new kit, rendered with the project's answers."""
+def plan_update(base: Path, theirs: Path, project: Path, managed: Iterable[str]) -> UpdatePlan:
+    """`base` and `theirs`: the old and the new kit, rendered with the project's answers; `managed`:
+    the paths each of them owns, by its own manifest."""
     plan = UpdatePlan()
-    managed = sorted({p for p in [*files_under(base), *files_under(theirs)] if is_managed(p)})
-    for path in managed:
+    for path in sorted(set(managed)):
         in_base, in_theirs = (base / path).is_file(), (theirs / path).is_file()
+        if (project / path).is_symlink():  # a merge would write through it, outside the diff
+            plan.linked.append(path)
+            continue
         in_project = (project / path).is_file()
         occupied = os.path.lexists(project / path)  # a directory or a link where a file would go
         if in_base and in_theirs:
@@ -865,17 +869,82 @@ def apply_update(
     return result
 
 
-def _render_export(clone: Path, ref: str, answers: Answers, work: Path, name: str) -> Path:
-    """The kit at `ref`, exported and rendered with `answers`, under `work/name`."""
-    raw, rendered = work / f"{name}-raw", work / name
-    export(clone, ref, raw)
+@dataclass
+class Rules:
+    """One kit version's manifest and renderer: its own `kit.py`. Each exported tree is classified
+    and rendered by the kit.py it came with, so a pattern the newer kit dropped still names the
+    base's file (which is then removed), and the base is rendered by the rules that rendered the
+    project."""
+
+    version: str
+    is_managed: Callable[[str], bool]
+    category: Callable[[str], str | None]
+    render_tree: Callable[[Path, Path, Any, Iterable[str]], list[str]]
+    answers: Any  # that version's `Answers`, from the lock's values it knows
+
+
+def rules_of(raw: Path, answers: Answers) -> Rules:
+    """The rules of the kit exported at `raw`: this module's own when its kit.py is this file,
+    otherwise that kit.py loaded as a module of its own."""
+    source = raw / "kit.py"
+    if not source.is_file():
+        raise Refused(f"the kit at {raw.name} has no kit.py: not a kit")
+    if _same(source, Path(__file__)):
+        return Rules(KIT_VERSION, is_managed, category, render_tree, answers)
+    name = "kit_" + re.sub(r"\W", "_", raw.name)
+    spec = importlib.util.spec_from_file_location(name, source)
+    if spec is None or spec.loader is None:
+        raise Refused(f"{source} cannot be loaded as a module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module  # the dataclasses in it look their module up by name
+    bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True  # no __pycache__ in the export: files_under() lists it
+    try:
+        spec.loader.exec_module(module)
+        known = {f.name for f in fields(module.Answers)}
+        theirs = module.Answers(**{k: v for k, v in asdict(answers).items() if k in known})
+        return Rules(
+            module.KIT_VERSION, module.is_managed, module.category, module.render_tree, theirs
+        )
+    except Exception as error:  # another version's code: whatever it raises is one sentence here
+        raise Refused(
+            f"the kit.py of the kit at {raw.name} could not be used ({error!r})"
+        ) from error
+    finally:
+        sys.dont_write_bytecode = bytecode
+
+
+@dataclass
+class Export:
+    """A kit version rendered with the project's answers, and what of it the kit owns."""
+
+    rendered: Path
+    managed: list[str]
+    version: str
+
+
+def _render_raw(raw: Path, answers: Answers, rendered: Path) -> Export:
+    """Render the exported tree at `raw` into `rendered`, by its own kit.py's rules."""
+    rules = rules_of(raw, answers)
     paths = files_under(raw)
-    unknown = [p for p in paths if category(p) is None]
+    unknown = [p for p in paths if rules.category(p) is None]
     if unknown:
         shown = ", ".join(unknown[:5]) + ("…" if len(unknown) > 5 else "")
-        say(f"{len(unknown)} files of the kit at {ref[:7]} are unknown to this kit.py: {shown}")
-    render_tree(raw, rendered, answers, [p for p in paths if p not in unknown])
-    return rendered
+        say(
+            f"{len(unknown)} files of the kit {rules.version} are unknown to its own kit.py: "
+            f"{shown}"
+        )
+    written = rules.render_tree(
+        raw, rendered, rules.answers, [p for p in paths if p not in unknown]
+    )
+    return Export(rendered, [p for p in written if rules.is_managed(p)], rules.version)
+
+
+def _render_export(clone: Path, ref: str, answers: Answers, work: Path, name: str) -> Export:
+    """The kit at `ref`, exported under `work/<name>-raw` and rendered under `work/<name>`."""
+    raw = work / f"{name}-raw"
+    export(clone, ref, raw)
+    return _render_raw(raw, answers, work / name)
 
 
 def _project_checks(root: Path, require_clean: bool = True) -> Lock:
@@ -889,14 +958,14 @@ def _project_checks(root: Path, require_clean: bool = True) -> Lock:
         raise Refused(
             f"{LOCK} or pyproject.toml cannot be read ({error}): unresolved conflict markers?"
         ) from error
-    # the handed-over run (HANDOVER_VARIABLE) starts from a tree the first run found clean and
-    # then changed by one file, kit.py: that run does not ask again
-    handed_over = os.environ.get(HANDOVER_VARIABLE) == "1"
-    dirty = run(["git", "status", "--porcelain"], root).stdout.strip()
-    if require_clean and not handed_over and dirty:
-        raise Refused(
-            "the working tree is not clean: commit or stash first, so the update is the diff"
-        )
+    if require_clean:  # `status` needs no git at all
+        state = run(["git", "status", "--porcelain"], root, check=False)
+        if state.returncode != 0:
+            raise Refused(f"{root} is not a git repository: update runs in the project's checkout")
+        if state.stdout.strip():
+            raise Refused(
+                "the working tree is not clean: commit or stash first, so the update is the diff"
+            )
     if name != lock.answers.package:
         raise Refused(
             f"{LOCK} says package {lock.answers.package!r}, pyproject.toml says {name!r}: the "
@@ -926,28 +995,32 @@ def without_option(argv: list[str], name: str) -> list[str]:
     return kept
 
 
-def _hand_over(root: Path, theirs_raw: Path, argv: list[str], clone: Path, repo: str) -> int | None:
-    """Take the newer kit's `kit.py` (copied verbatim into every project) and run *its* `update`
-    with the same arguments, so the newer manifest and rules decide the rest. None when this file
-    already is that version, or when this is the second run. The clone is handed on too."""
-    if os.environ.get(HANDOVER_VARIABLE) == "1" or _same(theirs_raw / "kit.py", Path(__file__)):
+def _hand_over(
+    root: Path, theirs_raw: Path, target: str, args: argparse.Namespace, clone: Path, repo: str
+) -> int | None:
+    """Run the target kit's `kit.py` — from the export, written nowhere — with the same arguments,
+    so its manifest and rules decide the update, and `kit.py` itself arrives through the plan like
+    every other kit-owned file. None when that kit.py is this file, or when this is the run handed
+    over to (`--clone` marks it and brings the first run's clone). The tree is untouched either way,
+    so a refusal from either run leaves it as it was."""
+    if args.clone or _same(theirs_raw / "kit.py", Path(__file__)):
         return None
-    shutil.copy(theirs_raw / "kit.py", root / "kit.py")
-    say("took the newer kit.py first; running its update")
-    passed_on = without_option(argv, "--repo")  # the resolved one goes instead
+    say(
+        f"the kit at {target} has another kit.py ({kit_version_of(theirs_raw)}); it runs this "
+        "update"
+    )
     done = subprocess.run(
         [
             sys.executable,
-            str(root / "kit.py"),
+            str(theirs_raw / "kit.py"),
             "update",
-            *passed_on,
+            *without_option(args.argv, "--repo"),  # the resolved one goes instead
             "--repo",
             repo,
             "--clone",
             str(clone),
         ],
         cwd=root,
-        env={**os.environ, HANDOVER_VARIABLE: "1"},
         check=False,
     )
     return done.returncode
@@ -992,21 +1065,23 @@ def update(args: argparse.Namespace) -> int:
                 )
             theirs_raw = work / "theirs-raw"
             export(clone, target_sha, theirs_raw)
-            handed = _hand_over(root, theirs_raw, args.argv, clone, repo)
-            if handed is not None:
-                return handed
             new_version = kit_version_of(theirs_raw)
             old_key, new_key = version_key(lock.version), version_key(new_version)
-            if old_key and new_key and new_key < old_key:
+            if old_key and new_key and new_key < old_key:  # before the hand-over: nothing written
                 raise Refused(
                     f"the kit at {target} is version {new_version}, older than the "
                     f"{lock.version} this project has"
                 )
-            theirs = work / "theirs"
-            render_tree(theirs_raw, theirs, lock.answers, files_under(theirs_raw))
+            handed = _hand_over(root, theirs_raw, target, args, clone, repo)
+            if handed is not None:
+                return handed
+            theirs = _render_raw(theirs_raw, lock.answers, work / "theirs")
             base = _render_export(clone, base_sha, lock.answers, work, "base")
-            plan = plan_update(base, theirs, root)
-            result = apply_update(plan, base, theirs, root, lock.version, new_version)
+            managed = [*base.managed, *theirs.managed]
+            plan = plan_update(base.rendered, theirs.rendered, root, managed)
+            result = apply_update(
+                plan, base.rendered, theirs.rendered, root, lock.version, new_version
+            )
             write_lock(root, lock.answers, new_version, repo, target_sha)
             changelog = theirs_raw / "CHANGELOG.md"
             notes = (
@@ -1034,6 +1109,11 @@ def update(args: argparse.Namespace) -> int:
     )
     _print_list("missing: kit-owned files you deleted (not recreated)", plan.missing)
     _print_list("not added: new in the kit, you have another file there", plan.blocked_add)
+    _print_list(
+        "not touched: symbolic links in the project (the kit's file would go through them; the "
+        "link stays yours)",
+        plan.linked,
+    )
     if notes:
         print()
         print(notes)
@@ -1066,21 +1146,31 @@ def status_command(args: argparse.Namespace) -> int:
             fetch_kit(args.repo or lock.repo, clone, root)
             versions = kit_versions(clone)
             newest = versions[-1] if versions else "(no release tag)"
-            base_ref = args.from_ref or lock.commit or f"v{lock.version}"
-            print(f"kit version: {lock.version} ({base_ref[:12]}); newest: {newest}")
+            own = lock.commit or f"v{lock.version}"
+            base_ref = args.from_ref or own
+            compared = f"; compared with --from {args.from_ref}" if args.from_ref else ""
+            print(f"kit version: {lock.version} ({own[:12]}); newest: {newest}{compared}")
             try:
                 base_sha = resolve(clone, base_ref)
             except Refused:
+                if args.from_ref:  # a ref the user typed: a call that cannot be right
+                    raise
+                why = (
+                    f"the commit {lock.commit[:12]} the lock records is not in the kit (another "
+                    "repository, or a rewritten history)"
+                    if lock.commit
+                    else f"no tag v{lock.version} in the kit (a project made before the kit's "
+                    "first release)"
+                )
                 print(
-                    f"the kit this project took cannot be reconstructed: no ref {base_ref!r} in "
-                    "the kit (a project made before the kit's first release); pass --from <ref>"
+                    f"the kit this project took cannot be reconstructed: {why}; pass --from <ref>"
                 )
                 return 0
             base = _render_export(clone, base_sha, lock.answers, work, "base")
             changed = [
                 p
-                for p in files_under(base)
-                if is_managed(p) and (not (root / p).is_file() or not _same(base / p, root / p))
+                for p in base.managed
+                if not (root / p).is_file() or not _same(base.rendered / p, root / p)
             ]
             _print_list("kit-owned files that differ from the kit you took", changed)
             if not changed:
@@ -1181,7 +1271,9 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    problem = python_version_problem(sys.version_info.major, sys.version_info.minor)
+    problem = python_version_problem(
+        sys.version_info.major, sys.version_info.minor, sys.version_info.micro
+    )
     if problem:
         say(problem)
         return 2
