@@ -706,6 +706,10 @@ def kit_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     assert '"extras/*"' not in kit_py_file.read_text("utf-8")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "drop: the extras are gone, pattern and file")
+    # and a branch that is not a kit at all: kit.py removed
+    git(repo, "switch", "-q", "-c", "nokit", "v0.1.0")
+    git(repo, "rm", "-q", "kit.py")
+    git(repo, "commit", "-q", "-m", "nokit: not a kit")
     git(repo, "switch", "-q", "main")
     return repo
 
@@ -923,11 +927,11 @@ def test_status_names_the_versions_and_the_locally_changed_kit_files(
 # ---------------------------------------------------------------------------- update, round 2
 
 
-def test_update_takes_the_newer_kit_py_first_and_its_manifest_decides(
+def test_the_targets_kit_py_runs_the_update_and_its_manifest_decides(
     kit_repo: Path, tmp_path: Path, templates: Path
 ) -> None:
     """v0.3.0 adds a kit-owned pattern (`extras/*`) in its own kit.py and a file under it. The
-    project's kit.py knows nothing of it; the update takes the newer kit.py and re-runs with it, so
+    project's kit.py knows nothing of it; the target's kit.py runs the update from the export, so
     the file arrives in the same run (round 1 of the review: the first run skipped it, and the
     second said "nothing to do")."""
     project = project_from(kit_repo, tmp_path / "project", templates)
@@ -1171,3 +1175,44 @@ def test_a_kit_owned_path_that_is_a_link_is_left_alone_and_listed(
     assert result.returncode == 0, result.stdout + result.stderr
     assert outside.read_bytes() == before and hook.is_symlink()
     assert "not touched" in result.stdout and "scripts/fmt_hook.py" in result.stdout
+
+
+def test_a_kit_owned_folder_that_is_a_link_is_left_alone_and_listed(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    """The link is a folder on the way, not the file: a merge, an add and a remove under it would
+    all land outside the project."""
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    outside = tmp_path / "outside-scripts"
+    shutil.move(project / "scripts", outside)
+    (project / "scripts").symlink_to(outside, target_is_directory=True)
+    git(project, "add", "-A")
+    git(project, "commit", "-q", "-m", "scripts is a link")
+    before = {p.name: p.read_bytes() for p in outside.iterdir()}
+    result = kit_py(project, "update", "--to", "v0.3.0", "--no-sync")  # fmt_hook merges, run.sh new
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert {p.name: p.read_bytes() for p in outside.iterdir()} == before
+    assert "not touched" in result.stdout
+    assert "scripts/fmt_hook.py" in result.stdout and "scripts/run.sh" in result.stdout
+
+
+def test_a_target_without_kit_py_is_refused_in_a_sentence(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    result = kit_py(project, "update", "--to", "nokit", "--no-sync")
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "has no kit.py" in result.stdout and "nokit" in result.stdout
+    assert "Traceback" not in result.stderr and git(project, "status", "--porcelain") == ""
+
+
+def test_a_temporary_directory_inside_the_project_is_refused(
+    kit_repo: Path, tmp_path: Path, templates: Path
+) -> None:
+    """The first run's working folder would be an untracked path in the handed-over run's tree."""
+    project = project_from(kit_repo, tmp_path / "project", templates)
+    (project / "tmp").mkdir()
+    env = {**os.environ, "TMPDIR": str(project / "tmp")}
+    result = kit_py(project, "update", "--to", "v0.2.0", "--no-sync", env=env)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "inside the project" in result.stdout and git(project, "status", "--porcelain") == ""

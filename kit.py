@@ -790,9 +790,11 @@ def plan_update(base: Path, theirs: Path, project: Path, managed: Iterable[str])
     """`base` and `theirs`: the old and the new kit, rendered with the project's answers; `managed`:
     the paths each of them owns, by its own manifest."""
     plan = UpdatePlan()
+    real_root = os.path.realpath(project)
     for path in sorted(set(managed)):
         in_base, in_theirs = (base / path).is_file(), (theirs / path).is_file()
-        if (project / path).is_symlink():  # a merge would write through it, outside the diff
+        # the path or a folder on the way is a link: a merge, add or remove would land outside
+        if os.path.realpath(project / path) != os.path.join(real_root, path):
             plan.linked.append(path)
             continue
         in_project = (project / path).is_file()
@@ -883,12 +885,12 @@ class Rules:
     answers: Any  # that version's `Answers`, from the lock's values it knows
 
 
-def rules_of(raw: Path, answers: Answers) -> Rules:
+def rules_of(raw: Path, answers: Answers, label: str) -> Rules:
     """The rules of the kit exported at `raw`: this module's own when its kit.py is this file,
-    otherwise that kit.py loaded as a module of its own."""
+    otherwise that kit.py loaded as a module of its own. `label` names the version to the user."""
     source = raw / "kit.py"
     if not source.is_file():
-        raise Refused(f"the kit at {raw.name} has no kit.py: not a kit")
+        raise Refused(f"the kit at {label} has no kit.py: not the kit")
     if _same(source, Path(__file__)):
         return Rules(KIT_VERSION, is_managed, category, render_tree, answers)
     name = "kit_" + re.sub(r"\W", "_", raw.name)
@@ -907,9 +909,7 @@ def rules_of(raw: Path, answers: Answers) -> Rules:
             module.KIT_VERSION, module.is_managed, module.category, module.render_tree, theirs
         )
     except Exception as error:  # another version's code: whatever it raises is one sentence here
-        raise Refused(
-            f"the kit.py of the kit at {raw.name} could not be used ({error!r})"
-        ) from error
+        raise Refused(f"the kit.py of the kit at {label} could not be used ({error!r})") from error
     finally:
         sys.dont_write_bytecode = bytecode
 
@@ -920,12 +920,11 @@ class Export:
 
     rendered: Path
     managed: list[str]
-    version: str
 
 
-def _render_raw(raw: Path, answers: Answers, rendered: Path) -> Export:
+def _render_raw(raw: Path, answers: Answers, rendered: Path, label: str) -> Export:
     """Render the exported tree at `raw` into `rendered`, by its own kit.py's rules."""
-    rules = rules_of(raw, answers)
+    rules = rules_of(raw, answers, label)
     paths = files_under(raw)
     unknown = [p for p in paths if rules.category(p) is None]
     if unknown:
@@ -937,14 +936,16 @@ def _render_raw(raw: Path, answers: Answers, rendered: Path) -> Export:
     written = rules.render_tree(
         raw, rendered, rules.answers, [p for p in paths if p not in unknown]
     )
-    return Export(rendered, [p for p in written if rules.is_managed(p)], rules.version)
+    return Export(rendered, [p for p in written if rules.is_managed(p)])
 
 
-def _render_export(clone: Path, ref: str, answers: Answers, work: Path, name: str) -> Export:
+def _render_export(
+    clone: Path, ref: str, answers: Answers, work: Path, name: str, label: str
+) -> Export:
     """The kit at `ref`, exported under `work/<name>-raw` and rendered under `work/<name>`."""
     raw = work / f"{name}-raw"
     export(clone, ref, raw)
-    return _render_raw(raw, answers, work / name)
+    return _render_raw(raw, answers, work / name, label)
 
 
 def _project_checks(root: Path, require_clean: bool = True) -> Lock:
@@ -1030,6 +1031,11 @@ def update(args: argparse.Namespace) -> int:
     root = Path.cwd()
     try:
         lock = _project_checks(root)
+        if Path(tempfile.gettempdir()).resolve().is_relative_to(root.resolve()):
+            raise Refused(
+                "the temporary directory (TMPDIR) is inside the project: the update's working "
+                "files would be in the diff; point it elsewhere"
+            )
         branch = run(["git", "branch", "--show-current"], root).stdout.strip()
         if branch == lock.answers.base:
             raise Refused(
@@ -1065,6 +1071,11 @@ def update(args: argparse.Namespace) -> int:
                 )
             theirs_raw = work / "theirs-raw"
             export(clone, target_sha, theirs_raw)
+            their_label, base_label = f"{target} ({target_sha[:7]})", f"{base_ref} ({base_sha[:7]})"
+            if not (theirs_raw / "kit.py").is_file():
+                raise Refused(
+                    f"the kit at {their_label} has no kit.py: not the kit (--repo {repo})"
+                )
             new_version = kit_version_of(theirs_raw)
             old_key, new_key = version_key(lock.version), version_key(new_version)
             if old_key and new_key and new_key < old_key:  # before the hand-over: nothing written
@@ -1075,8 +1086,8 @@ def update(args: argparse.Namespace) -> int:
             handed = _hand_over(root, theirs_raw, target, args, clone, repo)
             if handed is not None:
                 return handed
-            theirs = _render_raw(theirs_raw, lock.answers, work / "theirs")
-            base = _render_export(clone, base_sha, lock.answers, work, "base")
+            theirs = _render_raw(theirs_raw, lock.answers, work / "theirs", their_label)
+            base = _render_export(clone, base_sha, lock.answers, work, "base", base_label)
             managed = [*base.managed, *theirs.managed]
             plan = plan_update(base.rendered, theirs.rendered, root, managed)
             result = apply_update(
@@ -1166,7 +1177,8 @@ def status_command(args: argparse.Namespace) -> int:
                     f"the kit this project took cannot be reconstructed: {why}; pass --from <ref>"
                 )
                 return 0
-            base = _render_export(clone, base_sha, lock.answers, work, "base")
+            label = f"{base_ref} ({base_sha[:7]})"
+            base = _render_export(clone, base_sha, lock.answers, work, "base", label)
             changed = [
                 p
                 for p in base.managed
