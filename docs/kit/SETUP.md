@@ -28,10 +28,10 @@ the guard's tests ask every installed shell, so both zsh and bash are fine.
    `kit.lock`, runs `uv lock`, `uv sync --all-groups` and `make check`, and prints the next steps.
 3. `make prove` — every gate shown red on a planted defect on *your* machine (a few minutes).
 4. Commit, and push that commit **straight to the base branch** — the one time anything does. The
-   template commit is not yet your project: the integrity check compares with it and would show
-   the kit's own tests (`test_kit.py`, the renamed sample tests) as vanished in a PR, and the Stop
-   hook of a Claude Code session in that checkout would block for the same reason until the push.
-   So run `init` from a terminal, not inside a session; open the first session after the push.
+   template commit is not yet your project: CI's integrity check compares a PR with it and would
+   show the kit's own tests (`test_kit.py`, the renamed sample tests) as vanished. (The Stop hook
+   does not look at vanished tests — ADR-0008 — so a session in the checkout can stop; `init` from a
+   terminal is still the simpler way.)
 5. Open `README.md` (now your project's) and `docs/ROADMAP.md`; write the first brief from
    `docs/briefs/000-TEMPLATE.md` as a draft PR. From here on, every change is a PR.
 
@@ -47,8 +47,9 @@ checkout"). Secrets live outside the repository (`~/.config/<name>/…`), never 
   rewrites files on purpose; nothing else does.
 - When a PR touches a gate file, CI is red until the maintainer labels `gates-approved` after
   reading the diff; a later push to a gate file removes the label again.
-- When a test vanished or a skip or escape-hatch comment was added, CI (and the Stop hook) are red
-  until the maintainer labels `checks-weakened-approved`.
+- When a test vanished or a skip or escape-hatch comment was added, CI's `integrity` job is red
+  until the maintainer labels `checks-weakened-approved`. The Stop hook does not check this
+  (ADR-0008): run `scripts/integrity.py --base origin/<base>` yourself before `gh pr ready`.
 - Friction goes in `docs/FRICTION.md` as it happens; the weekly outer loop turns it into enforcement.
 
 ## 4. Customising — where things go

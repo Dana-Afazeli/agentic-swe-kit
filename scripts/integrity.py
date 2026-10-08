@@ -16,8 +16,9 @@ Compares the working tree with the commit where the branch left REF, and lists:
                        listed too. Left out with --tests-only.
 
 The tool lists and does not judge; the maintainer does, with the label `checks-weakened-approved`.
-The Stop hook runs it with --tests-only and the CI job `integrity` runs all of it: one script, so
-the two cannot disagree about a test.
+The CI job `integrity` runs all of it and holds the merge; the implementer runs it before `gh pr
+ready`. The Stop hook used to run it with --tests-only and does not any more (ADR-0008): a session
+that removed a test on purpose was held by it, the reviewers' sessions too.
 
 Exit codes: 0 nothing listed, 1 findings, 2 the comparison could not be made (the gate fails
 closed, like mutation_gate.py).
@@ -275,7 +276,7 @@ def main(argv: Sequence[str]) -> int:
     )
     parser.add_argument("--base", required=True, metavar="REF", help="the branch being merged into")
     parser.add_argument(
-        "--tests-only", action="store_true", help="leave out escape hatches (the Stop hook does)"
+        "--tests-only", action="store_true", help="leave out escape hatches (a quicker local run)"
     )
     arguments = parser.parse_args(argv)
     base: str = arguments.base

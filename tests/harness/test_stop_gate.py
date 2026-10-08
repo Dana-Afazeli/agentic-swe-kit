@@ -1,4 +1,8 @@
-"""The Stop hook blocks on a red `make check` or a weakened test, and only when code changed."""
+"""The Stop hook blocks on a red `make check`, and only when code changed.
+
+It asks nothing else: a test that vanished is the CI job `integrity`'s to report, with the
+maintainer's label (`test_ci_still_holds_the_merge_for_a_weakened_test` is where that stays true;
+ADR-0008)."""
 
 import io
 import subprocess
@@ -6,7 +10,6 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from subprocess import CompletedProcess
-from typing import Any
 
 import pytest
 
@@ -47,34 +50,19 @@ def test_needs_gate(changed: list[str], expected: bool) -> None:
 class Runner:
     """Stands in for the commands the hook runs; records what was asked.
 
-    `labels` is what `gh` answers when asked for the PR's labels: (exit code, output).
+    The hook runs `make check` and nothing else: any other command fails the test.
     """
 
-    def __init__(
-        self,
-        make: tuple[int, str],
-        integrity: tuple[int, str, str] = (0, "", ""),
-        labels: tuple[int, str] = (0, ""),
-    ):
+    def __init__(self, make: tuple[int, str]):
         self.make = make
-        self.integrity = integrity
-        self.labels = labels
         self.calls: list[list[str]] = []
 
     def __call__(self, args: list[str]) -> CompletedProcess[str]:
         self.calls.append(args)
-        if args[0] == "make":
-            code, out = self.make
-            return CompletedProcess(args, code, stdout=out, stderr="")
-        if args[0] == "gh":
-            code, out = self.labels
-            return CompletedProcess(args, code, stdout=out, stderr="")
-        code, out, err = self.integrity
-        return CompletedProcess(args, code, stdout=out, stderr=err)
-
-
-GH_LABELS = ["gh", "pr", "view", "--json", "labels", "--jq", ".labels[].name"]
-VANISHED = "vanished tests (1):\n  tests/t.py::test_gone\n"
+        if args[0] != "make":
+            raise AssertionError(f"the hook ran {args}: it may run `make check` only")
+        code, out = self.make
+        return CompletedProcess(args, code, stdout=out, stderr="")
 
 
 def changed_set(
@@ -104,70 +92,14 @@ def test_red_make_check_blocks_with_the_last_40_lines(
     assert "line 60\n" in err
     assert "line 20\n" not in err
     assert "make check" in err
-    assert run.calls == [["make", "check"]]  # integrity is not asked while the gate is red
-
-
-def test_weakened_test_blocks_and_names_the_label(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    changed_set(monkeypatch, "tests/t.py")
-    run = Runner(make=(0, "ok\n"), integrity=(1, VANISHED, ""), labels=(0, "brief-approved\n"))
-
-    assert stop_gate.main(run) == 2
-
-    err = capsys.readouterr().err
-    assert "tests/t.py::test_gone" in err
-    assert "needs the maintainer: label `checks-weakened-approved`" in err
-    assert run.calls[-1] == GH_LABELS  # the hook asked for the PR's labels before blocking
-
-
-@pytest.mark.parametrize(
-    "labels",
-    ["checks-weakened-approved\n", "brief-approved\nchecks-weakened-approved\ngates-approved\n"],
-)
-def test_a_weakened_test_the_maintainer_approved_lets_the_session_stop(
-    labels: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The label on the branch's PR is the maintainer's answer; the hook reads it as CI does."""
-    changed_set(monkeypatch, "tests/t.py")
-    run = Runner(make=(0, "ok\n"), integrity=(1, VANISHED, ""), labels=(0, labels))
-
-    assert stop_gate.main(run) == 0
-    assert run.calls[-1] == GH_LABELS
-
-
-def test_a_label_that_only_contains_the_name_is_not_the_label(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    changed_set(monkeypatch, "tests/t.py")
-    labels = "not-checks-weakened-approved\nchecks-weakened-approved-later\n"
-    run = Runner(make=(0, "ok\n"), integrity=(1, VANISHED, ""), labels=(0, labels))
-
-    assert stop_gate.main(run) == 2
-
-
-def test_labels_that_cannot_be_read_block(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """No PR, no network, no login: the hook cannot know, so it fails closed."""
-    changed_set(monkeypatch, "tests/t.py")
-    failure = "no pull requests found for branch\nchecks-weakened-approved\n"
-    run = Runner(make=(0, "ok\n"), integrity=(1, VANISHED, ""), labels=(1, failure))
-
-    assert stop_gate.main(run) == 2
-
-    err = capsys.readouterr().err
-    assert "tests/t.py::test_gone" in err
-    assert "could not read the labels of this branch's PR" in err
-    assert "no pull requests found for branch" in err
-    assert "needs the maintainer: label `checks-weakened-approved`" in err
+    assert run.calls == [["make", "check"]]  # nothing else is run
 
 
 class MissingProgram(Runner):
     """A runner on a machine where one program is not installed: starting it raises."""
 
-    def __init__(self, missing: str, **results: Any):
-        super().__init__(**results)
+    def __init__(self, missing: str, make: tuple[int, str]):
+        super().__init__(make)
         self.missing = missing
 
     def __call__(self, args: list[str]) -> CompletedProcess[str]:
@@ -177,25 +109,10 @@ class MissingProgram(Runner):
         return super().__call__(args)
 
 
-def test_gh_that_cannot_be_started_blocks(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """An uncaught exception would exit 1, and Claude Code does not block on exit 1."""
-    changed_set(monkeypatch, "tests/t.py")
-    run = MissingProgram("gh", make=(0, "ok\n"), integrity=(1, VANISHED, ""))
-
-    assert stop_gate.main(run) == 2
-
-    err = capsys.readouterr().err
-    assert "tests/t.py::test_gone" in err
-    assert "could not read the labels of this branch's PR" in err
-    assert "No such file or directory" in err
-    assert "needs the maintainer: label `checks-weakened-approved`" in err
-
-
 def test_make_that_cannot_be_started_blocks(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """An uncaught exception would exit 1, and Claude Code does not block on exit 1."""
     changed_set(monkeypatch, "src/pkg/a.py")
     run = MissingProgram("make", make=(0, "ok\n"))
 
@@ -218,35 +135,31 @@ def test_any_failure_inside_the_hook_blocks(
     assert "stop gate: the gate itself failed (RuntimeError('boom'))" in capsys.readouterr().err
 
 
-def test_integrity_that_cannot_be_determined_blocks_with_its_reason(
+def test_a_green_gate_lets_the_session_stop_and_nothing_else_is_run(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    changed_set(monkeypatch, "tests/t.py")
-    cannot = (2, "", "integrity: cannot determine: no base\n")
-    run = Runner(make=(0, "ok\n"), integrity=cannot, labels=(0, "checks-weakened-approved\n"))
-
-    assert stop_gate.main(run) == 2
-
-    err = capsys.readouterr().err
-    assert "integrity: cannot determine: no base" in err
-    assert "checks-weakened-approved" not in err
-    assert GH_LABELS not in run.calls  # no label covers "could not compare"
-
-
-def test_green_gate_and_clean_integrity_let_the_session_stop(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    changed_set(monkeypatch, "src/pkg/a.py", base=stop_gate.BASE_BRANCH)
-    run = Runner(make=(0, "ok\n"), integrity=(0, "integrity: clean\n", ""))
+    """A session that removed a test on purpose is not held: CI's `integrity` job reports it."""
+    changed_set(monkeypatch, "tests/t.py", base=stop_gate.BASE_BRANCH)
+    run = Runner(make=(0, "ok\n"))
 
     assert stop_gate.main(run) == 0
 
     assert capsys.readouterr().err == ""
-    integrity = [sys.executable, str(stop_gate.ROOT / "scripts" / "integrity.py")]
-    assert run.calls == [
-        ["make", "check"],
-        [*integrity, "--base", stop_gate.BASE_BRANCH, "--tests-only"],
-    ]
+    assert run.calls == [["make", "check"]]  # no integrity check, no `gh` for a label
+
+
+CI = stop_gate.ROOT / ".github" / "workflows" / "ci.yml"
+
+
+def test_ci_still_holds_the_merge_for_a_weakened_test() -> None:
+    """The check the hook gave up is CI's: the job runs the whole script and wants the label."""
+    text = CI.read_text(encoding="utf-8")
+    job = text.split("\n  integrity:\n", 1)[1].split("\n  gate-guard:\n", 1)[0]
+    assert "if: github.event_name == 'pull_request'" in job
+    assert 'uv run python scripts/integrity.py --base "$BASE"' in job
+    assert "--tests-only" not in job  # the whole check, escape-hatch comments and skips included
+    assert "grep -qxF 'checks-weakened-approved'" in job
+    assert "exit 1" in job.split("grep -qxF 'checks-weakened-approved'", 1)[1]  # no label: red
 
 
 def test_nothing_changed_runs_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -260,9 +173,9 @@ def test_nothing_changed_runs_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_a_reviewers_clone_is_not_gated(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The review launcher marks its processes: a reviewer changes nothing, and the branch's own
-    red — a test the maintainer has yet to approve — would otherwise keep it from ever stopping
-    (PR 1 of the kit: both reviewers ran to their time limits that way)."""
+    """The review launcher marks its processes: a reviewer changes nothing, and a red gate on the
+    PR under review is the author's to pass, not the reviewer's (PR 1 of the kit: both reviewers
+    ran to their time limits on the branch's own red, before this marker existed)."""
     changed_set(monkeypatch, "src/pkg/a.py")
     monkeypatch.setenv(stop_gate.REVIEWER_CLONE_VARIABLE, "1")
     run = Runner(make=(2, "would be red\n"))

@@ -23,12 +23,17 @@ preserved local edit, conflict markers, added file, removed file (unchanged → 
 kept and listed), lock rewritten.
 Exit: a project on an old kit version takes a newer one with one command and a PR.
 
-## 3. `make prove` (brief 003)
+## 2a. The Stop hook keeps `make check` only (brief 003) — from friction, PR open 2026-10-08
+The vanished-test check leaves the Stop hook (ADR-0008, after the source project's ADR-0010): a hold
+the session cannot lift held both reviewers of PR 1 and every fresh project's first session. CI's
+`integrity` job holds the merge as before. Exit: a session that removes a test on purpose can stop.
+
+## 3. `make prove` (brief 004)
 `tests/prove/`: a session fixture clones the committed tree, each proof plants one defect and shows
 its gate red, then the clean tree is green; CI job `prove`.
 Exit: HARNESS.md's gates table has a proof per row, and the proofs run on every PR.
 
-## 4. Rehearsal (brief 004)
+## 4. Rehearsal (brief 005)
 "Use this template" into a private throwaway repository; `init`; `make check`; `make prove`; a PR
 there shows the CI jobs and `gate-guard`; a fresh session there loads `AGENTS.md` and is held by the
 hooks; then an `update` across two kit refs, once clean and once with a collision. What breaks is

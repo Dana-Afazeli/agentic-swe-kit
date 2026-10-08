@@ -7,6 +7,13 @@ moves to.
 
 ## Unreleased
 
+### Changed
+- The Stop hook runs `make check` and nothing else (ADR-0008, after the source project's ADR-0010):
+  the vanished-test check and the label `checks-weakened-approved` are CI's `integrity` job's alone,
+  which holds the merge; the hook no longer holds a session on a branch that removed a test on
+  purpose — it held both reviewers of PR 1 and would hold every fresh project's first session.
+  `AGENTS.md` asks the implementer to run `scripts/integrity.py` before `gh pr ready`.
+
 ### Added
 - `kit.py` with `init` (render the placeholders in place, seed the project-owned files, remove the
   kit-only ones, write `kit.lock`, re-lock, run the gate; `--labels`, `--hooks`, `--no-sync`),

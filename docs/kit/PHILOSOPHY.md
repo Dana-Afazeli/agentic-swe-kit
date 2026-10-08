@@ -106,9 +106,12 @@ look: every legitimate refactor of a test trips such a pattern, and a test left 
 body gutted trips none. The kit checks the **outcome** instead: `scripts/integrity.py` compares the
 test IDs the gate ran at the base with the ones it runs now, and lists vanished tests, new skips, and
 new escape-hatch comments (`# noqa`, `# type: ignore`, `# pragma: no cover`, `# pragma: no mutate`,
-…) — whatever tool made the change. The Stop hook runs the test half, so the session hears about it
-while it still has the context; the CI job runs all of it and is red until the maintainer labels
-`checks-weakened-approved`. A legitimate rename costs one label and one sentence in the PR. The
+…) — whatever tool made the change. The CI job runs it and is red until the maintainer labels
+`checks-weakened-approved`; the agent runs it itself before marking the PR ready. The Stop hook
+used to run the test half, so the session heard about it at once — and held every session on a
+branch that removed a test on purpose, the reviewers' too, until a label only the maintainer adds:
+a hold the held party cannot lift is a stall, not a gate (ADR-0008). The merge waits for the
+maintainer; the session does not. A legitimate rename costs one label and one sentence in the PR. The
 assertion-level case (a test kept, its assertion gutted) is what the mutation gate is for.
 
 The escalation for high-stakes units — a separate session writes acceptance tests the implementer
