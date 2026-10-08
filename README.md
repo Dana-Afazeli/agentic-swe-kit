@@ -75,7 +75,7 @@ conflict markers that `update` lists. The result is a PR that touches gate files
 | `make check` | lint (ruff) · strict types (basedpyright) · import contracts (import-linter) · tests with branch coverage ≥ 90 % |
 | `make mutate` | mutation testing on the pure core (mutmut), gated: a surviving mutant fails |
 | `make prove` | every gate shown red on a planted defect, then green on the clean tree |
-| `.claude/settings.json` | allow/ask/deny rules and three hooks: a Bash guard (PreToolUse), a format hook (PostToolUse), a Stop gate that runs `make check` and the test-integrity check |
+| `.claude/settings.json` | allow/ask/deny rules and three hooks: a Bash guard (PreToolUse), a format hook (PostToolUse), a Stop gate that runs `make check` |
 | `scripts/` | the hooks, `integrity.py`, `mutation_gate.py`, and `review.py`, which starts the two PR reviewers as headless processes |
 | `.claude/skills/review-loop` · `.claude/agents/plan-reviewer.md` | the review loop and the conformance reviewer |
 | `.github/workflows/ci.yml` | jobs `check`, `mutation`, `secrets`, `integrity`, `gate-guard`, `prove` |

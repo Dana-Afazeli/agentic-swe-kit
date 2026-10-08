@@ -421,7 +421,7 @@ def test_init_renders_seeds_removes_and_writes_the_lock(copy_of_the_kit: Path) -
     assert scan_for(copy_of_the_kit, scanned, ("the maintainer",), (*verbatim, "*.py")) == []
     check_all(copy_of_the_kit)  # every knob's sites agree in the project too
     assert "Next steps for Ada Lovelace:" in result.stdout
-    assert "make prove" not in result.stdout  # no such target yet (brief 003)
+    assert "make prove" not in result.stdout  # no such target yet (brief 004)
 
 
 def test_init_with_another_base_and_prefix_rewrites_the_rules(copy_of_the_kit: Path) -> None:

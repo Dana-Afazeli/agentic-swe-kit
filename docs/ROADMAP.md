@@ -12,7 +12,7 @@ ever see.
 Render the placeholders, seed the project-owned files, write `kit.lock`, re-lock, `make check`;
 optional labels and hooks. Tests: `render()` is idempotent and covers every knob site; the manifest
 covers every tracked file; `init` into a copy leaves no placeholder behind (`test_no_leftovers`
-reused); `make check` is green in the copy (by hand until brief 003 puts it under `prove`).
+reused); `make check` is green in the copy (by hand until brief 004 puts it under `prove`).
 Exit: a project can be started from the template with one command.
 
 ## 2. `kit.py update` and `status` (brief 002) — PR open 2026-10-06, stacked on PR 1
