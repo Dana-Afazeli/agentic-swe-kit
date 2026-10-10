@@ -10,7 +10,9 @@ Labels this PR needs from the maintainer: `brief-approved` to start · `gates-ap
 two manifest lines; `.claude/skills/adopter/**`: new files under a gate folder) ·
 `checks-weakened-approved` not expected: no test is removed or changed.
 Needs merged: PR 5 (brief 005). The skill copies from a render, and after PR 5 a render holds no
-record of the kit; PR 5 also numbers the roadmap's units.
+record of the kit; PR 5 also numbers the roadmap's units. Once it is on `main`, bring this branch
+up to date (`git merge origin/main`) before the first test: the criteria use brief 005's fixture
+and manifest.
 Size: about 650 added lines — a skill of at most 200 lines, three reference files, one test
 module, a decision record. This brief is longer than one screen: it carries the rules the skill
 has to hold.
@@ -83,6 +85,8 @@ every file of a rendered project one of four classes, and a test keeps the table
     Lovelace" --into <folder>` writes 72 files and a `kit.lock` whose `commit` is empty.
   - A hook edited in a settings file reaches the running session (the note on hooks, "Not
     snapshotted at session start").
+  - `scripts/stop_gate.py` (`_gate`, lines 115–123) exits 2, which blocks the stop, when it finds
+    neither `origin/<base>` nor `<base>`.
   - `B`, `C`, `I` and `P` are the rule letters in use; `A` is free.
   - Not checked: whether `--permission-mode auto` lets a headless session write files and run a
     repository's own check commands in a scratch clone; what such a run costs.
@@ -109,9 +113,10 @@ every file of a rendered project one of four classes, and a test keeps the table
   target's roadmap units are written from it.
 - The steps of `SKILL.md`, in this order: orient, read-only, and run the target's own checks once
   (the baseline) · ask the maintainer (base branch for units, branch prefix, name; each collision;
-  which existing commands make up `make check`) · render the kit at the ref with those answers
-  into a scratch folder and note the kit's commit · place the pieces on a branch made for the
-  adoption · wire the gate and the hooks · show it red · record · hand over.
+  which existing commands make up `make check`) · clone the kit at the ref into a scratch folder,
+  render from that clone with those answers, and note that clone's commit (`render` reads the
+  tree it runs in and asks for a `--package`: any identifier does, since `src/` is left out) ·
+  place the pieces on a branch made for the adoption · wire the gate and the hooks · show it red · record · hand over.
 - The rules the skill holds, each numbered in its text and in `references/rules.md`:
   1. A path that exists is never written over. A collision is put to the maintainer (place the
      kit's file beside it under another name · leave it out · the maintainer merges by hand);
@@ -119,12 +124,15 @@ every file of a rendered project one of four classes, and a test keeps the table
   2. Files come from the render, never from the kit's tree, and a file is placed only as its
      class in the table says.
   3. `make check` runs the checks the target already has, by the commands its CI or its package
-     scripts use, and nothing the adopter made up. A check that is red in the baseline stays out
-     of `make check`, is named first in the report, and is the first unit of the roadmap.
+     scripts use, and nothing the adopter made up. What is red in the baseline stays out of
+     `make check` as the smallest unit the target's own runner can name (one test file, one
+     package of a workspace whose test command runs per package) and everything else stays in;
+     it is named first in the report and is the first unit of the roadmap.
   4. The Stop gate fires on the paths where the target's code is, and the guard's gate files are
      the target's own configuration files: both are adaptations, and both are listed.
   5. `.claude/settings.json` is written last, because a hook edited there reaches the session
-     that is doing the adoption.
+     that is doing the adoption; and the base branch exists in the clone before it is written,
+     because the Stop gate blocks while it finds no base.
   6. A tool is named only after its documentation was read that day and a dated note written in
      the target's `docs/research/`.
   7. What was installed is shown working in the target before the report: the guard refusing a
@@ -178,8 +186,9 @@ The rehearsal: one run, which no test can replace. The target is a scratch clone
 the maintainer names; ask for its path once, before the run. After the run:
 - R1. `git diff --name-status "$START"..HEAD` in the target shows `A` lines only, and `git status
   --short` shows nothing but the skill's own folder: no file that existed was changed or deleted.
-- R2. `make check` in the target runs the target's own commands; a check that was red in the
-  baseline is not among them and is the first line of the report.
+- R2. `make check` in the target runs the target's own commands and every test that was green
+  in the baseline. What was red is left out as one file or one package, never as the whole test
+  command, and is the first line of the report.
 - R3. The guard in the target refuses a push to the base branch with exit code 2.
 - R4. The report lists every collision, and the files placed, adapted and left out add up to the
   files of the render.
@@ -213,7 +222,7 @@ not as the step expects?
   START="$(git -C "$T" rev-parse HEAD)"; git -C "$T" remote -v
   mkdir -p "$T/.claude/skills" && cp -R "$K/.claude/skills/adopter" "$T/.claude/skills/"
   echo ".claude/skills/adopter/" >> "$T/.git/info/exclude"
-  cd "$T" && claude -p "/adopter $K (nobody can be asked in this run: base branch work, branch prefix work, the maintainer's name stays the maintainer)" \
+  cd "$T" && claude -p "/adopter $K (nobody can be asked in this run: package target, base branch work, branch prefix work, the maintainer's name stays the maintainer)" \
     --model sonnet --effort medium --permission-mode auto --permission-prompts none \
     --strict-mcp-config --max-budget-usd 5 --output-format stream-json --verbose > "$R/run.jsonl"
   git -C "$T" diff --name-status "$START"..HEAD | cut -c1 | sort | uniq -c
