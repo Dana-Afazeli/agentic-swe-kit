@@ -410,6 +410,42 @@ def test_a_real_comment_beside_inline_code_is_still_a_comment_left() -> None:
     assert problems[0].startswith("line 5: a comment is left")
 
 
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x0c", "\x0b", "\x85", "\x1e"])
+def test_a_line_ends_where_github_ends_it(separator: str) -> None:
+    """GitHub ends a line at `\\n`, `\\r` or `\\r\\n` and nowhere else; a heading that is not at the
+    start of such a line is not a heading, and the page is read as GitHub shows it."""
+    one_line = f"- A message of more than 4,096 characters.{separator}## Not proven{separator}Text."
+    above = [*ABOVE[:11], one_line, *ABOVE[13:]]  # "## Not proven" and its text, on one line
+
+    problems = pr.page_problems(page(above=above))
+
+    assert 'the part "## Not proven" is missing above the reference line' in problems
+
+
+@pytest.mark.parametrize("body", ["-", "*", "+ [ ]", "1. [ ]", "1) [x]", "> ", "> - [ ]"])
+def test_a_part_with_only_an_empty_list_marker_or_quote_is_empty(body: str) -> None:
+    above = [*ABOVE[:12], body, *ABOVE[13:]]  # "## Not proven" with nothing but a marker under it
+
+    assert pr.page_problems(page(above=above)) == ['the part "## Not proven" is empty']
+
+
+@pytest.mark.parametrize("name", ["page.md", "proofs.md"])
+def test_a_dry_runs_output_among_the_proofs_is_refused_by_name(
+    name: str, proofs: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`page --dry-run` cannot know which folder holds the proofs; `proofs` knows what a dry run
+    writes, and would otherwise post the page as a proof."""
+    (proofs / name).write_text("written by a dry run\n", "utf-8")
+
+    code = pr.main(
+        ["proofs", "15", str(proofs), "--dry-run", str(tmp_path / "out")], Shell(), SESSION
+    )
+
+    assert code == 1
+    assert f"{name} is what a dry run writes" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
 # Anything that goes wrong while reading a file or running a command ends in one line and exit
 # code 1, never in a traceback: the caller is a session that reads the last line.
 

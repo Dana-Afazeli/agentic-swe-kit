@@ -316,12 +316,10 @@ def _maintainer(text: str, a: Answers) -> str:
     # In backticks the phrase is the skills' term for the role (`the maintainer`), not the person:
     # it stays. Elsewhere, `\s+`: hard-wrapped prose may break the phrase over a line end; the
     # name joins the lines.
-    spans = re.split(r"(`[^`\n]*`)", text)
-    return "".join(
-        span
-        if span.startswith("`")
-        else re.sub(r"\b[Tt]he\s+maintainer\b", lambda _: a.maintainer, span)
-        for span in spans
+    spans = re.split(r"(`[^`\n]*`)", text)  # code at the odd positions; a fence's third
+    return "".join(  # backtick opens the prose that follows it, so position decides, not a char
+        span if position % 2 else re.sub(r"\b[Tt]he\s+maintainer\b", lambda _: a.maintainer, span)
+        for position, span in enumerate(spans)
     )
 
 

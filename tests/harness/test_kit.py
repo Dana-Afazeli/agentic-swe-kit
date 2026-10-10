@@ -565,6 +565,17 @@ def test_render_text_leaves_the_skills_alone_and_renders_the_roles_line() -> Non
     assert "`feature/units-NNN-slug`" in rendered
 
 
+@pytest.mark.parametrize("fence", ["```", "~~~"])
+def test_the_maintainer_is_renamed_after_a_fenced_block_and_kept_in_backticks(fence: str) -> None:
+    """A fence of three backticks must not be taken for inline code: the prose after it is prose."""
+    prose = "Then ask the maintainer to merge; `the maintainer` is a term."
+    text = f"{fence}\nmake check\n{fence}\n{prose}\n"
+
+    rendered = kit.render_text("docs/x.md", text, LONG_NAMES)
+
+    assert "Then ask Ada Lovelace to merge; `the maintainer` is a term." in rendered
+
+
 def test_render_refuses_the_kit_itself_and_a_folder_without_a_repository(
     copy_of_the_kit: Path, tmp_path: Path
 ) -> None:

@@ -58,9 +58,15 @@ REFERENCE_PARTS = (
     "## Checks weakened",
 )
 COMMENT_LEFT = "the template's comments are instructions: delete each one as you write its part"
-EMPTY = re.compile(r"\s*(?:[-*]\s*\[[ xX]?\])?\s*")  # nothing, or a checkbox with no step
+# Nothing, or an empty list item (with or without its checkbox) or an empty quote: GitHub shows a
+# bullet, a box or a bar, and nothing is written.
+EMPTY = re.compile(r"\s*(?:>\s*)*(?:(?:[-*+]|\d+[.)])\s*(?:\[[ xX]?\])?)?\s*")
+# GitHub ends a line at `\n`, `\r` or `\r\n` and nowhere else; str.splitlines() would also end one
+# at a form feed or a Unicode line separator, where GitHub shows one paragraph.
+LINE_END = re.compile(r"\r\n|\r|\n")
 
 SESSION = "CLAUDE_CODE_SESSION_ID"
+DRY_RUN_FILES = ("page.md", "proofs.md")  # what `--dry-run FOLDER` writes
 # The marker line is an HTML comment at the top of a comment anyone can imitate: nothing goes
 # into it but ids, and nothing is copied out of one that holds more.
 AN_ID = r"[0-9A-Za-z_-]+"
@@ -265,7 +271,9 @@ def _empty(marks: Sequence[str], written: Sequence[str], parts: Sequence[str]) -
 
 def page_problems(text: str) -> list[str]:
     """Why a text is not the page; empty when it is."""
-    lines = [line.rstrip() for line in text.splitlines()]
+    lines = [line.rstrip() for line in LINE_END.split(text)]
+    if lines and lines[-1] == "":  # a final line end closes the last line, it opens no new one
+        lines.pop()
     marks, written, comments, unclosed = _scan(lines)
     if unclosed:
         return [unclosed]
@@ -355,6 +363,13 @@ def _proof_files(folder: Path, dry_run: Path | None) -> list[Path]:
             raise Refused(
                 f"{entry.name} is a folder: the comment holds the files at the top of {folder} "
                 "and would leave it out without a word. Move its files up, or take it out"
+            )
+    for entry in entries:
+        if (
+            entry.name in DRY_RUN_FILES
+        ):  # `page --dry-run` cannot know which folder holds the proofs
+            raise Refused(
+                f"{entry.name} is what a dry run writes, not a proof: move it out of {folder}"
             )
     if not entries:
         raise Refused(f"no files in {folder}: save each proof to a file first")
