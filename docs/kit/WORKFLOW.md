@@ -44,9 +44,10 @@ reviewers' model and effort.
    maintainer reads the brief in the PR and adds `brief-approved`.** Comments on the draft are the
    interview's last round.
 4. **Implement** (fresh session on the same branch): for each behaviour, failing test first → run it
-   and show the failure → code → green → refactor. The Stop hook enforces `make check` and the
-   test-integrity check. Mark the PR ready for review when done. Read the PR's comments — top-level
-   ones too — before each push and before marking it ready.
+   and show the failure → code → green → refactor. The Stop hook enforces `make check`; run
+   `scripts/integrity.py --base origin/<base>` yourself before marking the PR ready (CI holds the
+   merge for a vanished test; the hook does not hold the session — ADR-0008). Read the PR's
+   comments — top-level ones too — before each push and before marking it ready.
 5. **Review** (fresh context): the implementer runs the `review-loop` skill. One command,
    `uv run python scripts/review.py <pr> --plan MODEL/EFFORT --code MODEL/EFFORT`, starts
    `plan-reviewer` (conformance) and `/code-review <effort> --comment` (correctness) as processes of

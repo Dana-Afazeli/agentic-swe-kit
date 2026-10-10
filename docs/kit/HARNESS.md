@@ -61,7 +61,7 @@ keeps them in step.
 | mutation (changed `core/` modules) | 0 survivors unless `# pragma: no mutate` + reason (which needs the label) | — | — | ✓ (`make mutate` locally) | a test that calls the function and asserts nothing |
 | secret scan | none | — | ✓ | ✓ | a fake AWS key ID **with** a secret access key beside it |
 | gate-guard | label `gates-approved` present when gate files change; removed by a push that touches one | — | — | ✓ | a PR touching `Makefile` without the label |
-| test integrity | no test ID gone, no new skip/xfail, unless `checks-weakened-approved` | ✓ (`integrity.py --tests-only`, after `make check`; the hook reads the label) | — | ✓ (job `integrity`) | delete a `def test_` → the stop is blocked with the vanished ID; committed → CI red without the label |
+| test integrity | no test ID gone, no new skip/xfail, unless `checks-weakened-approved` | — (ADR-0008: the hook ran `integrity.py --tests-only` until then; the agent runs it before `gh pr ready`) | — | ✓ (job `integrity`) | delete a `def test_` → `integrity.py --base origin/<base>` lists the vanished ID; in a PR, CI red without the label |
 | escape hatches | no added `# noqa`, `# ruff: disable`, `# type: ignore`, `# pyright: …`, `# pragma: no cover` / `no branch` / `no mutate`, `# fmt: off/skip`, `# isort: skip/off`, unless `checks-weakened-approved` | — | — | ✓ (job `integrity`) | `# noqa` on a line under `src/` |
 | the Bash guard | refuses: `rm` on a tracked path, `rm -r/-f` outside the repo and the temp directory, a shell write to a gate file, `git commit --no-verify`, a force-push, a push that lands on the base branch, a label change, `gh api` writes other than PR comments/reviews/thread resolution, `gh alias set` | PreToolUse on Bash | — | — (CI's `gate-guard` and `integrity` are the wall behind it) | `rm -rf ~/x` → exit 2; `rm -r mutants` → allowed |
 
@@ -112,8 +112,9 @@ the gate is worthless.
 3. `secrets`: betterleaks over the commits of the PR or push (pinned release binary, checksum verified;
    betterleaks publishes no GitHub Action). The version lives in `.pre-commit-config.yaml` and in
    `ci.yml`: keep them in step.
-4. `integrity`: `scripts/integrity.py --base "$BASE"`, the script the Stop hook runs; red on a
-   vanished test, a new skip, or a new escape hatch unless the PR carries `checks-weakened-approved`.
+4. `integrity`: `scripts/integrity.py --base "$BASE"`; red on a vanished test, a new skip, or a new
+   escape hatch unless the PR carries `checks-weakened-approved`. This job alone holds the merge for
+   it: the Stop hook ran the test half too until ADR-0008.
    If the comparison cannot be made, red regardless of the label.
 5. `gate-guard`: red when the PR touches a gate file and lacks `gates-approved`. The approval covers
    what was read: a push (`synchronize`) that touches a gate file the PR itself changes removes the
@@ -164,14 +165,14 @@ reviewed; `.claude/settings.local.json` stays gitignored for machine-only tweaks
     would delete an import added in one edit and used in the next). Never blocks.
   - `Stop` → `stop_gate.py` (timeout 180 s): exit 0 if nothing changed under `src/`, `tests/`,
     `scripts/` or in the gate's config files (working tree, or this branch against `origin/<base>`);
-    else `make check`, and on failure exit 2 with the last 40 lines; then `integrity.py --tests-only`,
-    and on a vanished or skipped test exit 2 with the list and the label name — unless the branch's PR
-    carries `checks-weakened-approved`, read with `gh pr view` as the CI job reads it. Labels it cannot
-    read: it blocks. Any failure inside the hook: it blocks (an uncaught exception would exit 1, which
-    does not block). **No `stop_hook_active` bypass**: the CLI stops after eight consecutive blocks,
-    and that is the only way out. One exemption: a reviewer process started by `scripts/review.py`
-    carries `KIT_REVIEWER_CLONE=1`, and the hook stands aside — a reviewer changes nothing, and the
-    branch's own red (a renamed test awaiting the label) must not keep it from ending. An implementer
+    else `make check`, and on failure exit 2 with the last 40 lines, else exit 0. It does not look at
+    vanished tests or at the label: it did until ADR-0008, and held every session on a branch that
+    removed a test on purpose, the reviewers' too; that check is CI's `integrity` job's alone. Any
+    failure inside the hook: it blocks (an uncaught exception would exit 1, which does not block).
+    **No `stop_hook_active` bypass**: the CLI stops after eight consecutive blocks, and that is the
+    only way out. One exemption: a reviewer process started by `scripts/review.py` carries
+    `KIT_REVIEWER_CLONE=1`, and the hook stands aside — a reviewer changes nothing, and a red gate
+    on the PR under review is the author's to pass. An implementer
     cannot set that variable for its hooks: they run with Claude Code's environment, and the settings
     file that could change it is a gate file.
 - Claude Code picks up hook edits while a session runs (file watcher); agent definitions

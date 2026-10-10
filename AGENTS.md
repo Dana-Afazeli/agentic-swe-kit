@@ -8,8 +8,8 @@ is merged by a kit update (`docs/kit/HARNESS.md`, "File ownership").
 ## The gate
 - `make check` (lint, strict types, import contracts, tests, coverage) must be green before you
   call anything done. Paste its output, with the exit code.
-- The Stop hook runs it whenever code changed and keeps the session from stopping while it is red,
-  or while a test that exists on `main` is gone or skipped. Fix the cause; do not look for a way round.
+- The Stop hook runs it whenever code changed and keeps the session from stopping while it is red.
+  Fix the cause; do not look for a way round.
 - `make mutate` when you touch `src/kitpkg/core/`: CI runs it on the changed core modules.
 
 ## TDD protocol
@@ -21,8 +21,9 @@ is merged by a kit update (`docs/kit/HARNESS.md`, "File ownership").
   green. CI job `integrity` turns red on either until the maintainer labels the PR
   `checks-weakened-approved`.
 - If a test is wrong, or an escape hatch is justified, say so in the PR with the reason and list it
-  under "Next steps for the maintainer". A renamed test counts as a removed one: same answer. Once
-  the maintainer has added the label, the Stop hook lets you stop.
+  under "Next steps for the maintainer". A renamed test counts as a removed one: same answer. The
+  Stop hook does not check this, CI does: run `uv run python scripts/integrity.py --base origin/main`
+  before `gh pr ready` and list what it prints under "Checks weakened".
 
 ## Architecture — import-linter enforces it (`make arch`)
 - `kitpkg.core` holds the decisions and is pure: nothing from `kitpkg.io` or `kitpkg.main`, no I/O

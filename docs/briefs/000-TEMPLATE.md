@@ -29,7 +29,8 @@ never saw the implementation could write the tests>
 2. <edge case by name: empty input, limit exactly hit, unicode outside the BMP, …>
 3. …
 A criterion a trivial test could satisfy is not a criterion. Existing tests may not be removed,
-skipped or weakened — the Stop hook and the CI job `integrity` catch it; if a test is genuinely wrong,
+skipped or weakened — the CI job `integrity` catches it (run `scripts/integrity.py` yourself before
+`gh pr ready`); if a test is genuinely wrong,
 say so in the PR and the maintainer labels it `checks-weakened-approved`.
 Gates: `make check` green; `make mutate` shows no surviving mutant in touched `core/` modules (or a
 justified `# pragma: no mutate`, which needs the same label).

@@ -1,6 +1,7 @@
 # ADR-0005 — Test integrity is checked at the outcome, not at the edit
 
 **Status:** accepted 2026-10-06 (adopted from the source project's ADR-0008 of 2026-10-03) ·
+decision 3 and the second sentence of decision 4 superseded by ADR-0008 (2026-10-08) ·
 **Deciders:** the maintainer
 
 ## Context

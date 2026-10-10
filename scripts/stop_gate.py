@@ -1,13 +1,13 @@
-"""Stop hook (brief 002): a session may not stop on a red gate or a weakened test.
+"""Stop hook: a session may not stop on a red gate.
 
 Claude Code runs this when a turn is about to end. If code changed — on this branch since it left
-the base, or in the working tree — the hook runs `make check`, then the test half of
-`scripts/integrity.py`. Exit 2 with the reason on stderr sends the session back to work; exit 0
-lets it stop.
+the base, or in the working tree — the hook runs `make check`. Exit 2 with the reason on stderr
+sends the session back to work; exit 0 lets it stop.
 
-A test that vanished or was skipped blocks the stop unless this branch's PR carries the label
-`checks-weakened-approved`: the maintainer's approval, read with `gh` exactly as the CI job reads
-it. The session cannot add the label itself (the Bash guard and the deny rules refuse it).
+A test that vanished or was skipped does not block the stop. It used to, until the label
+`checks-weakened-approved` was on the PR; that held every session on a branch that removed a test on
+purpose, the reviewers' sessions too (ADR-0008). That check is now the CI job `integrity`'s alone
+(`scripts/integrity.py`), which keeps the merge, and not the session, waiting for the maintainer.
 
 There is deliberately no `stop_hook_active` bypass: the hook never reads its input. A bypass
 would turn the gate into a one-time nudge. Claude Code itself ends the turn after eight
@@ -28,8 +28,8 @@ BASES = (
     (f"origin/{BASE_BRANCH}", f"refs/remotes/origin/{BASE_BRANCH}"),
     (BASE_BRANCH, f"refs/heads/{BASE_BRANCH}"),
 )
-# A change to one of these can turn `make check` red or remove a test: the code, the files that
-# configure the gate, and any tool's own config file that would be read instead of them.
+# A change to one of these can turn `make check` red: the code, the files that configure the
+# gate, and any tool's own config file that would be read instead of them.
 GATED_DIRS = ("src/", "tests/", "scripts/")
 GATED_FILES = frozenset(
     {
@@ -44,11 +44,10 @@ GATED_FILES = frozenset(
     }
 )
 TAIL_LINES = 40
-LABEL = "checks-weakened-approved"
 # Set by scripts/review.py in the environment of a reviewer process. A reviewer works in a
-# throwaway clone of the PR's head and changes nothing; the gate is the author's. Without this,
-# the branch's own red — a renamed test the maintainer has yet to approve — kept both reviewers
-# of the kit's PR 1 from ever stopping, until the launcher's time limit ended them.
+# throwaway clone of the PR's head and changes nothing; a red gate on the PR under review is the
+# author's to pass. Before this marker, the branch's own red kept both reviewers of the kit's PR 1
+# from ever stopping, until the launcher's time limit ended them.
 REVIEWER_CLONE_VARIABLE = "KIT_REVIEWER_CLONE"
 
 Runner = Callable[[list[str]], CompletedProcess[str]]
@@ -142,36 +141,7 @@ def _gate(run: Runner) -> int:
         )
         return 2
 
-    script = str(ROOT / "scripts" / "integrity.py")
-    integrity = run([sys.executable, script, "--base", base, "--tests-only"])
-    if integrity.returncode == 0:
-        return 0
-    report = _output(integrity).rstrip()
-    if integrity.returncode != 1:
-        print(report, file=sys.stderr)
-        print("stop gate: test integrity could not be determined (see above)", file=sys.stderr)
-        return 2
-
-    # A weakened test is the maintainer's to approve, with a label on this branch's PR. The hook
-    # reads the label as the CI job does. When it cannot be read — no PR yet, no network, no gh —
-    # it blocks.
-    try:
-        labels = run(["gh", "pr", "view", "--json", "labels", "--jq", ".labels[].name"])
-        readable, answer = labels.returncode == 0, _output(labels)
-    except OSError as error:
-        readable, answer = False, str(error)
-    if readable and LABEL in answer.splitlines():
-        return 0
-    print(report, file=sys.stderr)
-    if not readable:
-        why = " ".join(answer.strip().splitlines()[:1]) or "gh failed"
-        print(f"stop gate: could not read the labels of this branch's PR: {why}", file=sys.stderr)
-    print(
-        "stop gate: a test vanished or was skipped — restore it; if it is right to remove it, "
-        f"say why in the PR: it needs the maintainer: label `{LABEL}`",
-        file=sys.stderr,
-    )
-    return 2
+    return 0
 
 
 if __name__ == "__main__":
