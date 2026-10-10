@@ -60,7 +60,9 @@ REFERENCE_PARTS = (
 COMMENT_LEFT = "the template's comments are instructions: delete each one as you write its part"
 # Nothing, or an empty list item (with or without its checkbox) or an empty quote: GitHub shows a
 # bullet, a box or a bar, and nothing is written.
-EMPTY = re.compile(r"\s*(?:>\s*)*(?:(?:[-*+]|\d+[.)])\s*(?:\[[ xX]?\])?)?\s*")
+# The spaces before a checkbox belong to the checkbox: two runs of `\s*` side by side would try
+# every way to share a long run of spaces, four times the time for twice the length.
+EMPTY = re.compile(r"\s*(?:>\s*)*(?:(?:[-*+]|\d+[.)])(?:\s*\[[ xX]?\])?)?\s*")
 # GitHub ends a line at `\n`, `\r` or `\r\n` and nowhere else; str.splitlines() would also end one
 # at a form feed or a Unicode line separator, where GitHub shows one paragraph.
 LINE_END = re.compile(r"\r\n|\r|\n")
@@ -404,9 +406,12 @@ def post_proofs(
             )
         me = _call(run, ME).strip()
         listing = ["gh", "api", f"{COMMENTS}/{number}/comments", "--paginate", "--jq", EARLIER]
-        found = [line.split(" ", 2) for line in _call(run, listing).splitlines()]
-        # only a comment this account wrote is its to replace: the newest one
-        own = [each for each in found if len(each) == 3 and each[1] == me]
+        # one line per comment, cut at `\n` only: jq cut the body's first line there, and a line
+        # ended at any other separator would be text the comment's author chose (an id, a login)
+        lines = [line.rstrip("\r") for line in _call(run, listing).split("\n")]
+        found = [line.split(" ", 2) for line in lines]
+        # only a comment this account wrote is its to replace: the newest one, by a numeric id
+        own = [each for each in found if len(each) == 3 and each[1] == me and each[0].isdigit()]
         comment, marker_line = (own[-1][0], own[-1][2]) if own else ("", "")
 
     body = proofs_body(proofs, head, _sessions(marker_line, session))

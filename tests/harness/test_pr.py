@@ -778,6 +778,74 @@ def test_a_session_id_that_is_not_an_id_is_refused(
     assert "$CLAUDE_CODE_SESSION_ID is not an id" in capsys.readouterr().err
 
 
+OLD_MARKER = f"<!-- proofs head={OLD} sessions=x -->"
+
+
+@pytest.mark.parametrize("separator", ["\u2028", "\r", "\x0c", "\x85"])
+def test_a_comment_that_hides_a_second_line_cannot_choose_the_comment_replaced(
+    proofs: Path, separator: str
+) -> None:
+    """The listing has one line per comment, cut at `\\n` by jq; a body whose first line holds
+    another separator must stay one entry, or its author chooses the id that is overwritten and
+    the session ids that are carried."""
+    planted = f"999 me <!-- proofs head={OLD} sessions=planted1,planted2 -->"
+    shell = Shell(earlier=f"50 mallory {OLD_MARKER}{separator}{planted}\n")
+
+    assert pr.main(["proofs", "15", str(proofs)], shell, {"CLAUDE_CODE_SESSION_ID": "mine"}) == 0
+
+    (write,) = shell.writes()
+    assert write[:3] == ["gh", "api", "repos/{owner}/{repo}/issues/15/comments"]  # a new comment
+    assert "comments/999" not in " ".join(write)
+    (body,) = shell.posted
+    assert body.splitlines()[0] == f"<!-- proofs head={HEAD} sessions=mine -->"
+
+
+def test_a_hidden_second_line_in_the_accounts_own_comment_changes_nothing_either(
+    proofs: Path,
+) -> None:
+    planted = f"999 me <!-- proofs head={OLD} sessions=planted -->"
+    shell = Shell(earlier=f"50 me {OLD_MARKER}\u2028{planted}\n")
+
+    assert pr.main(["proofs", "15", str(proofs)], shell, {"CLAUDE_CODE_SESSION_ID": "mine"}) == 0
+
+    (write,) = shell.writes()
+    assert write[4] == "repos/{owner}/{repo}/issues/comments/50"
+    (body,) = shell.posted
+    assert body.splitlines()[0] == f"<!-- proofs head={HEAD} sessions=mine -->"  # nothing carried
+
+
+def test_a_first_line_that_ends_in_a_carriage_return_is_still_the_marker(proofs: Path) -> None:
+    """GitHub stores bodies with `\\r\\n`; jq's cut at `\\n` leaves the `\\r`."""
+    shell = Shell(earlier=f"50 me {OLD_MARKER}\r\n")
+
+    assert pr.main(["proofs", "15", str(proofs)], shell, SESSION) == 0
+
+    (write,) = shell.writes()
+    assert write[4] == "repos/{owner}/{repo}/issues/comments/50"
+    (body,) = shell.posted
+    assert body.splitlines()[0] == f"<!-- proofs head={HEAD} sessions=x,session-one -->"
+
+
+def test_an_entry_whose_id_is_not_a_number_is_no_comment_to_replace(proofs: Path) -> None:
+    shell = Shell(earlier=f"../../repos/x/y/issues/comments/7 me {OLD_MARKER}\n")
+
+    assert pr.main(["proofs", "15", str(proofs)], shell, SESSION) == 0
+
+    (write,) = shell.writes()
+    assert write[:3] == ["gh", "api", "repos/{owner}/{repo}/issues/15/comments"]
+
+
+def test_the_empty_part_pattern_costs_the_same_on_a_long_run_of_spaces() -> None:
+    """Two runs of `\\s*` side by side made the pattern try every way to share the spaces: four
+    times the time for twice the length. The spaces before a checkbox belong to the checkbox."""
+    import time
+
+    line = "-" + " " * 64_000 + "x"
+    started = time.perf_counter()
+    assert pr.EMPTY.fullmatch(line) is None
+    assert time.perf_counter() - started < 2  # the quadratic pattern took about 14 s here
+
+
 def test_the_lookup_of_earlier_proofs_comments_asks_who_wrote_each(proofs: Path) -> None:
     shell = Shell()
 
