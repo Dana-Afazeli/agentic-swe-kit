@@ -95,7 +95,8 @@ kit-only test that renders a project keeps it so.
 - `docs/decisions/0010-a-project-holds-no-record-of-the-kit.md`: the rule and the maintainer's two
   answers in their words, as above. Recorded as the planning session's choices, not the
   maintainer's: `.gitkeep` as the placeholder and its ownership; the date rule and what it leaves
-  out; `docs/MAINTAINING.md`; `kit.py` left out of the pointer check.
+  out; `docs/MAINTAINING.md`; `kit.py` left out of the pointer check; that `PHILOSOPHY.md` keeps
+  its reasons; that a site which tells an event keeps the fact.
 - Checked on 2026-10-10 at `9458f4f` by calling it: `review.find_brief("main-001-first",
   [".gitkeep", "001-first.md"])` returns `docs/briefs/001-first.md`, and with `[".gitkeep"]`
   returns `None`. Not checked: whether anything else lists `docs/briefs/`.
@@ -126,6 +127,11 @@ kit-only test that renders a project keeps it so.
    `[]`. The rendered project gives `[]` (`test_no_file_of_a_project_carries_a_date`).
 6. `AGENTS.md` names `docs/research/` and no longer `docs/kit/research/`, in at most 85 lines:
    `test_agents_md_keeps_what_every_role_needs` asks for `docs/research/`.
+7. No file of the rendered project contains `docs/kit/research`. Once the notes have moved, their
+   old paths are in no list that `record_pointers` reads, and `dates` leaves `tests/` out, so
+   nothing else sees them (`test_no_file_of_a_project_names_where_the_notes_were`). On 2026-10-10
+   four files do: `AGENTS.md`, `scripts/guard_bash.py`, `scripts/review.py`,
+   `tests/harness/test_role_skills.py`.
 
 Tests whose data changes and whose names stay: `kit_repo` gives version 0.1.0 a kit-owned file
 made for the purpose (`docs/kit/OLD.md`) that 0.2.0 removes, and the two update tests named under
@@ -133,13 +139,18 @@ made for the purpose (`docs/kit/OLD.md`) that 0.2.0 removes, and the two update 
 `test_role_skills.py` and the near-miss case in `test_roles.py` and `scripts/roles.py` are spelled
 with names that are no record of the kit (`RFC-2119` is three letters, a dash and digits too).
 
-The prose, which no test can show. At every site the sentence says what the thing does or what the
-rule is. The id, the date and the clause that only told what happened go; a reason that is the
-sentence itself stays; a condition replaces a story:
+The prose, which no test can show, at the two kinds of site:
+- A site that points at a record (an id, a path) keeps the decision — what the thing does, what
+  the reader has to do — and nothing else: no pointer and no explanation.
+- A site that tells an event (a date, an incident, a count of rounds) loses the event and keeps
+  the fact, in the present tense; a condition replaces a story.
+
+`PHILOSOPHY.md` is where the reasons live: it keeps them, and loses its ids, dates and events.
 
 | At `9458f4f` | After |
 |---|---|
 | `ci.yml:116-117` "…adds the label `checks-weakened-approved` (ADR-0005). Only this job holds the merge for it: the Stop hook no longer runs the script (ADR-0008); the implementer runs it…" | "…adds the label `checks-weakened-approved`. Only this job holds the merge for it; the implementer runs the script…" |
+| `HARNESS.md:170` "It does not look at vanished tests or at the label: it did until ADR-0008, and held every session on a branch that removed a test on purpose, the reviewers' too; that check is CI's `integrity` job's alone." | "It does not look at vanished tests or at the label: that check is CI's `integrity` job's alone." |
 | `PHILOSOPHY.md:116` "a hold the held party cannot lift is a stall, not a gate (ADR-0008)" | the same sentence without the parenthesis |
 | `WORKFLOW.md:26` "…share `.git/hooks` and Claude Code's local settings with the main checkout, and both bit us." | "…share `.git/hooks` and Claude Code's local settings with the main checkout." |
 | `SETUP.md:110` "…and the kit has no tag for the lock's version (a project made from the kit before its first release)" | the same sentence without the parenthesis |
@@ -167,11 +178,12 @@ two empty folders, the record template, four documents and the license.
   mode rejects.
 - A rendered project, before the first change and after the last (`$W` is the work folder outside
   the repository; a fresh folder for each run). Run on this branch on 2026-10-10: it lists 11 files
-  with an id and 15 files under `docs/`, five of them notes. After: no file with an id, and the
-  12 files of criterion 1.
+  with an id, 4 files that name `docs/kit/research`, and 15 files under `docs/`, five of them
+  notes. After: neither `grep` prints a file, and `find` prints the 12 files of criterion 1.
   ```
   python3 kit.py render --package acme --maintainer "Ada Lovelace" --into "$W/before"
-  (cd "$W/before" && grep -rIlE 'ADR-[0-9]{4}' . | sort; find docs -type f | sort)
+  cd "$W/before" && grep -rIlE 'ADR-[0-9]{4}' . | sort
+  grep -rIl 'docs/kit/research' . | sort; find docs -type f | sort
   ```
 - The real thing once: a project rendered from `9458f4f` takes this branch's head. Expected:
   "5 removed" (the notes), "0 with conflicts", exit code 0, and `git status --short` shows the
