@@ -15,7 +15,7 @@ covers every tracked file; `init` into a copy leaves no placeholder behind (`tes
 reused); `make check` is green in the copy (by hand until brief 003 puts it under `prove`).
 Exit: a project can be started from the template with one command.
 
-## 2. `kit.py update` and `status` (brief 002)
+## 2. `kit.py update` and `status` (brief 002) — PR open 2026-10-06, stacked on PR 1
 Three-way merge of the kit-owned files between two kit versions rendered with the project's answers
 (ADR-0007); the changelog between versions printed; `status` shows the version, the newest tag and
 locally modified kit-owned files. Tests against a fake kit repository with two tags: clean merge,

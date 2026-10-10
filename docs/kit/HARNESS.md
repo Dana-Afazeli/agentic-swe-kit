@@ -207,7 +207,9 @@ changed (`gates-approved`) · checks weakened (`checks-weakened-approved`).
 The list lives in `kit.py` (`CATEGORIES`, `SEEDS`); `tests/harness/test_kit.py` checks that every
 tracked file of the kit has an owner and every pattern names a file. Two exceptions inside the
 categories: `kit.py` is copied **verbatim** (its constants are the kit's placeholders; rendering it
-would rewrite them), and `tests/harness/test_kit.py` is kit-only (it tests the kit's own tree).
+would rewrite them), and `tests/harness/test_kit.py` is kit-only (it tests the kit's own tree). On
+`update`, each exported version is classified and rendered by its own `kit.py` — the target's runs
+the update when it differs from the project's — and `kit.py` itself is merged like the rest.
 
 ## 10. Knobs — what `kit.py init` rewrites
 
