@@ -12,5 +12,6 @@ file is kit-only: `init` removes it, and a project never receives it.
   where the project left it unchanged; say so in the changelog.
 - The kit's own decision records, briefs and research notes are records of the kit: they live in
   `docs/decisions/`, `docs/briefs/` and `docs/research/`, are kit-only, and no file a project
-  receives names one. `tests/harness/test_stateless.py` renders the kit as a project and scans it
-  for a record id, a pointer to a record, and a date.
+  receives names one by its path or its id. `tests/harness/test_stateless.py` renders the kit as a
+  project and scans it for a record id, the path of a record, and a date (outside `tests/` and the
+  lock files).

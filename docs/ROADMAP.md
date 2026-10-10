@@ -38,7 +38,8 @@ source project (its ADR-0011, decisions 9–12); ADR-0009. Exit: a session asked
 
 ## 2c. A project holds no record of the kit (brief 005) — PR open 2026-10-11
 The research notes move to `docs/research/` and are kit-only; `docs/briefs/` and `docs/research/`
-ship empty; no shipped file names a record id, a record of the kit or a date (ADR-0010).
+ship empty; no shipped file names a record id or the path of a record of the kit, and none outside
+`tests/` and the lock files carries a date (ADR-0010).
 Exit: a rendered project holds none of the kit's records, and a kit-only test keeps it so.
 
 ## 3. `make prove` (brief 007)

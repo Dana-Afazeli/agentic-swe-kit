@@ -221,9 +221,11 @@ page; the conformance reviewer judges whether it reads cold (P-06) and whether t
 
 A project receives `docs/briefs/` and `docs/research/` as empty folders (a `.gitkeep` each, which is
 project-owned: `init` hands it over and `update` never touches it); nothing the kit wrote in them
-comes with it, and a project's own briefs and notes there are never managed. No file a project
-receives names a decision record, a brief or a note of the kit, a record id or a date:
-`tests/harness/test_stateless.py` renders the kit as a project and scans it.
+comes with it, and `update` never touches a project's own briefs and notes there. `init` runs once,
+in a fresh copy of the kit, and removes every kit-only file under those folders: a file committed
+there before `init` is removed with them. No file a project receives names a record id or the path
+of a decision record, a brief or a note of the kit, and none outside `tests/` and the lock files
+carries a date: `tests/harness/test_stateless.py` renders the kit as a project and scans it.
 
 The list lives in `kit.py` (`CATEGORIES`, `SEEDS`); `tests/harness/test_kit.py` checks that every
 tracked file of the kit has an owner and every pattern names a file. Two exceptions inside the

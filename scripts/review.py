@@ -27,11 +27,11 @@ its working tree stays in the clone; and the caller may go on working while a re
 A reviewer process has no advisor and no MCP servers, and is stopped at a spending cap and a time
 limit. The rest are nets, not walls, because the process runs as the user, with the user's
 credentials. The edit tools are denied inside the clone, and the plain spelling of each command in
-`DENIED` is refused; another spelling (`git -C . commit`) gets through (the round 1 review of PR
-#11), which in a clone harms nothing. The clone's `origin` has no push address and a pre-push hook
-refuses every push; a push with the address typed out and `--no-verify` gets out (round 3). `gh`
-and a `claude` process started another way are not held by the clone at all; the Bash guard, which
-runs in the clone too, keeps labels and the base branches out of reach.
+`DENIED` is refused; another spelling (`git -C . commit`) gets through, which in a clone harms
+nothing. The clone's `origin` has no push address and a pre-push hook refuses every push; a push
+with the address typed out and `--no-verify` gets out. `gh` and a `claude` process started another
+way are not held by the clone at all; the Bash guard, which runs in the clone too, keeps labels
+and the base branches out of reach.
 
 Exit codes: 0 the reviewers ran, or nothing was left to run; 1 a run failed or its record could not
 be posted; 2 the call could not be right (PR not open; on the PR's branch with a head that is not
