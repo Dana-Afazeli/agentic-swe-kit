@@ -54,8 +54,8 @@ def test_the_ask_rules_name_the_guards_gate_files() -> None:
 
 def test_a_tools_own_config_file_is_a_gate_file() -> None:
     """Each of these is read before, or instead of, `pyproject.toml` or the `Makefile` by a tool
-    `make check` runs. Not on the gate list, one of them lowers a threshold with no label asked
-    for (PR #5 review, round 4). None exists here: all configuration is in `pyproject.toml`."""
+    `make check` runs. Not on the gate list, one of them lowers a threshold with no label asked for.
+    None exists here: all configuration is in `pyproject.toml`."""
     overrides = {
         *("GNUmakefile", "makefile"),  # GNU make tries them before Makefile
         *("pytest.toml", ".pytest.toml", "pytest.ini", ".pytest.ini"),  # pytest
@@ -71,14 +71,14 @@ def test_a_tools_own_config_file_is_a_gate_file() -> None:
     assert overrides <= guard_bash.GATE_FILES
     assert overrides <= stop_gate.GATED_FILES
     # The Stop hook keeps its own copy of the names: importing the guard would let a broken
-    # guard_bash.py end the hook with exit 1, which does not block (PR #5 review, round 7).
+    # guard_bash.py end the hook with exit 1, which does not block.
     assert not hasattr(stop_gate, "guard_bash")
     assert not [name for name in overrides if (ROOT / name).exists() and name != "makefile"]
 
 
 def test_gate_guard_sees_a_gate_path_that_git_would_quote(tmp_path: Path) -> None:
     """git puts a path in double quotes when it holds a non-ASCII character, a `"` or a `\\`;
-    the line then starts with `"`, and the job's `^(…)` never matches (PR #5 review, round 8).
+    the line then starts with `"`, and the job's `^(…)` never matches.
     The job's own `git diff` options and regex are run here on three such paths."""
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text("utf-8")
     listings = re.findall(r"=\$\((git [^)]*diff --name-only [^)]*)\)", workflow)

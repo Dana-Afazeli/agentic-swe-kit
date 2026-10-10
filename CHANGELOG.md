@@ -29,6 +29,17 @@ moves to.
   purpose — it held both reviewers of PR 1 and would hold every fresh project's first session.
   `AGENTS.md` asks the implementer to run `scripts/integrity.py` before `gh pr ready`.
 
+- A project holds no record of the kit (ADR-0010): the five research notes moved from
+  `docs/kit/research/` to `docs/research/` and are kit-only, so a project no longer receives them
+  and `update` removes them from one that has them (where the project changed one, it is kept and
+  listed); `docs/briefs/` and `docs/research/` ship empty, a `.gitkeep` each that is project-owned,
+  so `init` hands them over and `update` never adds or touches them; the maintenance notes left
+  `SETUP.md` for the kit-only `docs/MAINTAINING.md`. No shipped file names a record id or the path of a record
+  of the kit, and none outside `tests/` and the lock files carries a date written year-month-day;
+  the shipped files say what a thing does without how it came to be.
+  `tests/harness/test_stateless.py` renders the kit as a project and checks the ids, the paths and
+  the dates.
+
 ### Added
 - `kit.py` with `init` (render the placeholders in place, seed the project-owned files, remove the
   kit-only ones, write `kit.lock`, re-lock, run the gate; `--labels`, `--hooks`, `--no-sync`),

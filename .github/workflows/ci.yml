@@ -113,8 +113,8 @@ jobs:
 
   integrity:
     # No test vanishes, no skip is added, no check is switched off inline — unless the maintainer
-    # adds the label `checks-weakened-approved` (ADR-0005). Only this job holds the merge for it: the
-    # Stop hook no longer runs the script (ADR-0008); the implementer runs it before `gh pr ready`.
+    # adds the label `checks-weakened-approved`. Only this job holds the merge for it; the
+    # implementer runs the script before `gh pr ready`.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10

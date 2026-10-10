@@ -381,11 +381,17 @@ def test_init_renders_seeds_removes_and_writes_the_lock(copy_of_the_kit: Path) -
         "LICENSE",
         "docs/templates/README.md",
         "docs/decisions/0001-template-repo-with-its-own-updater.md",
+        "docs/research/2026-10-05-review-model-and-effort.md",
+        "docs/MAINTAINING.md",
         "tests/harness/test_kit.py",
         "tests/harness/test_no_leftovers.py",
+        "tests/harness/test_stateless.py",
     )
     for path in gone:
         assert path not in present, path
+    for place in ("docs/briefs/.gitkeep", "docs/research/.gitkeep"):  # the project's own, empty
+        assert place in present, place
+        assert (copy_of_the_kit / place).stat().st_size == 0, place
     seeded = (
         "README.md",
         "docs/DELTAS.md",
@@ -436,7 +442,7 @@ def test_init_renders_seeds_removes_and_writes_the_lock(copy_of_the_kit: Path) -
     assert agents.count("the maintainer") == 1
     check_all(copy_of_the_kit)  # every knob's sites agree in the project too
     assert "Next steps for Ada Lovelace:" in result.stdout
-    assert "make prove" not in result.stdout  # no such target yet (brief 005)
+    assert "make prove" not in result.stdout  # no such target yet
 
 
 def test_init_with_another_base_and_prefix_rewrites_the_rules(copy_of_the_kit: Path) -> None:
@@ -674,6 +680,7 @@ def kit_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
         target = repo / path
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / path, target)
+    (repo / "docs/kit/OLD.md").write_text("# Old\n\nFor kitpkg: gone in 0.2.0.\n", "utf-8")
     git(repo, "init", "-q", "-b", "main")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "v0.1.0")
@@ -686,7 +693,7 @@ def kit_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
     (repo / "docs/kit/NEW.md").write_text(
         "# New in 0.2.0\n\nFor kitpkg, by the maintainer.\n", "utf-8"
     )
-    (repo / "docs/kit/research/2026-09-29-toolchain-and-claude-code.md").unlink()
+    (repo / "docs/kit/OLD.md").unlink()
     pyproject = repo / "pyproject.toml"
     old_select = 'select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]'
     assert old_select in pyproject.read_text("utf-8")
@@ -828,7 +835,7 @@ def test_update_merges_adds_removes_and_relocks(
     )
     new = (project / "docs/kit/NEW.md").read_text("utf-8")
     assert "demo" in new and "kitpkg" not in new  # rendered with the project's answers
-    assert not (project / "docs/kit/research/2026-09-29-toolchain-and-claude-code.md").exists()
+    assert not (project / "docs/kit/OLD.md").exists()
     merged = pyproject.read_text("utf-8")
     assert '"C4"' in merged and 'dependencies = ["httpx"]' in merged  # both sides
     assert no_markers(project)
@@ -881,7 +888,7 @@ def test_update_keeps_a_removed_file_the_project_changed_and_says_so(
     kit_repo: Path, tmp_path: Path, templates: Path
 ) -> None:
     project = project_from(kit_repo, tmp_path / "project", templates)
-    note = project / "docs/kit/research/2026-09-29-toolchain-and-claude-code.md"
+    note = project / "docs/kit/OLD.md"
     note.write_text(note.read_text("utf-8") + "\nOur own addition.\n", "utf-8")
     git(project, "commit", "-q", "-am", "ours")
 

@@ -1,4 +1,4 @@
-"""Test and check integrity (brief 002, ADR-0008): list what a change took out of the safety net.
+"""Test and check integrity: list what a change took out of the safety net.
 
     python scripts/integrity.py --base REF [--tests-only]
 
@@ -17,8 +17,8 @@ Compares the working tree with the commit where the branch left REF, and lists:
 
 The tool lists and does not judge; the maintainer does, with the label `checks-weakened-approved`.
 The CI job `integrity` runs all of it and holds the merge; the implementer runs it before `gh pr
-ready`. The Stop hook used to run it with --tests-only and does not any more (ADR-0008): a session
-that removed a test on purpose was held by it, the reviewers' sessions too.
+ready`. The Stop hook does not run it: a session that removed a test on purpose would be held by
+it, the reviewers' sessions too.
 
 Exit codes: 0 nothing listed, 1 findings, 2 the comparison could not be made (the gate fails
 closed, like mutation_gate.py).

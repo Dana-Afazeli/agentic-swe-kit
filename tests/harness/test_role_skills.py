@@ -24,12 +24,12 @@ AGENTS_LINES_BEFORE_THE_ROLES = 92
 # Written in two pieces each, so that this file does not name what it says nothing may name.
 BRIEF_TEMPLATE = "docs/briefs/000-" + "TEMPLATE"  # the ADR template keeps its 0000-TEMPLATE name
 PR_TEMPLATE = "pull_request_" + "template"
+OLD_NOTES = "docs/kit/" + "research"  # where the dated lookups were; they are in docs/research/
 # Records of what was true when they were written: a brief is the record of its unit, an ADR is
 # never edited, a friction row, a changelog entry and a dated lookup say what happened then.
 RECORDS = (
     "docs/briefs/",
     "docs/decisions/",
-    "docs/kit/research/",
     "docs/research/",
     "docs/FRICTION.md",
     "CHANGELOG.md",
@@ -144,8 +144,7 @@ def test_no_skill_gives_the_maintainer_a_pronoun_of_one_person() -> None:
 
 def test_no_skill_body_holds_a_dollar_and_a_digit() -> None:
     """In a skill's body, `$0`, `$1`, … stand for the words it was started with. Started with
-    `15 --code opus/high`, a sample line `· $1.84 ·` reaches the session as `· --code.84 ·`
-    (docs/kit/research/2026-10-08-role-skills-in-a-headless-run.md)."""
+    `15 --code opus/high`, a sample line `· $1.84 ·` reaches the session as `· --code.84 ·`."""
     found = [
         f"{path.relative_to(ROOT)}:{number}: {line.strip()[:60]}"
         for path in sorted(SKILLS.glob("*/SKILL.md"))
@@ -208,13 +207,14 @@ def test_agents_md_keeps_what_every_role_needs() -> None:
         "gates-approved",
         "scope-approved",
         "Secrets never enter the repo",
-        "docs/kit/research/",
+        "docs/research/",
         "One session per checkout",
         "make eval",
         "No global installs",
         "## Project rules",
     ):
         assert needed in agents(), needed
+    assert OLD_NOTES not in agents()
 
 
 def test_the_two_templates_are_where_the_skills_keep_them() -> None:
@@ -248,14 +248,14 @@ def test_nothing_but_the_records_names_the_two_templates_that_moved() -> None:
 # --- the reviewers read their text from the skill ------------------------------------------------
 
 PR = review.PullRequest(
-    number=4,
+    number=42,
     repo="o/r",
     head="a" * 40,
     base="main",
-    branch="main-004-role-skills",
-    url="https://github.com/o/r/pull/4",
+    branch="main-042-quiet-hours",
+    url="https://github.com/o/r/pull/42",
 )
-BRIEF = Path("docs/briefs/004-role-skills.md")
+BRIEF = Path("docs/briefs/042-quiet-hours.md")
 
 
 def test_the_code_reviewers_protocol_is_the_reviewer_skills_correctness_reference() -> None:
@@ -280,8 +280,7 @@ def test_the_code_review_is_asked_its_four_questions_by_name() -> None:
 
 def test_the_conformance_reviewer_is_started_on_the_reviewer_skill() -> None:
     """A prompt that begins `/reviewer conformance` puts the skill's text in front of the
-    process (docs/kit/research/2026-10-08-role-skills-in-a-headless-run.md); the launcher's own
-    lines follow it as the skill's arguments."""
+    process; the launcher's own lines follow it as the skill's arguments."""
     first = review.plan_prompt(PR, BRIEF, 1, 3)
     later = review.plan_prompt(PR, BRIEF, 2, 3)
 
@@ -293,8 +292,7 @@ def test_the_conformance_reviewer_is_started_on_the_reviewer_skill() -> None:
 
 def test_the_conformance_reviewer_has_no_agent_file_and_the_launcher_names_its_tools() -> None:
     """Who runs is the launcher's to say: the conformance reviewer is started with no agent, on
-    the tools its reference tells it to use, without `Edit` and `Write`
-    (docs/kit/research/2026-10-10-the-conformance-reviewer-without-an-agent-file.md)."""
+    the tools its reference tells it to use, without `Edit` and `Write`."""
     conformance = (SKILLS / "reviewer" / "references" / "conformance.md").read_text("utf-8")
 
     argv = review.claude_argv("plan", review.Spec("sonnet", "medium"), PR, 1, budget=2, root=ROOT)

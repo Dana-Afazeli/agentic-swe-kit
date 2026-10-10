@@ -235,7 +235,7 @@ def test_bold_text_and_table_rows_that_are_not_written_like_an_id_are_left_alone
     tmp_path: Path,
 ) -> None:
     body = (
-        "1. **A-01** first, by **ADR-0011**; **UTF-8** text, **3-2-1**, an **e-mail**, "
+        "1. **A-01** first, by **RFC-2119**; **UTF-8** text, **3-2-1**, an **e-mail**, "
         "`x9-007`, and a **Note** in bold.\n"
     )
     rows = "| A-01 | first | git |\n| see | the table above | too |\n"
@@ -295,7 +295,7 @@ def test_a_first_cell_that_is_an_id_is_a_row_with_or_without_its_first_pipe(
         "Remove `/tmp/work/*brief-007*` afterwards.",
         "Save it in `$W/_notes-1.md`.",
         "A glob such as *pr-15* or _notes-1_ in plain text.",
-        "*ADR-0011* in italics and __UTF-8__ underlined.",
+        "*RFC-2119* in italics and __UTF-8__ underlined.",
         # two stars in code, before something that is no id
         "Wait `2**n-1` seconds between tries.",
         "T3\ndelay = 2**k-1\nT3",
