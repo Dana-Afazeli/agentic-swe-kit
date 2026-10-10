@@ -122,7 +122,8 @@ def test_a_projects_own_additions_are_not_the_kits() -> None:
     skills, its decisions — is nobody's but the project's (HARNESS.md §9: add, don't edit)."""
     assert kit.category(".github/workflows/ci.yml") == "kit-owned"
     assert kit.category(".github/actions/base/action.yml") == "kit-owned"
-    assert kit.category(".github/pull_request_template.md") == "kit-owned"
+    assert kit.category(".claude/skills/implementer/assets/pr-page.md") == "kit-owned"
+    assert kit.category(".claude/skills/implementer/scripts/pr.py") == "kit-owned"
     assert kit.category(".github/workflows/project.yml") is None
     assert not kit.is_managed(".github/workflows/project.yml")
     assert not kit.is_managed("docs/decisions/0008-our-own.md")
@@ -417,11 +418,25 @@ def test_init_renders_seeds_removes_and_writes_the_lock(copy_of_the_kit: Path) -
     scanned = [p for p in present if p != kit.LOCK]
     verbatim = ("uv.lock", *kit.VERBATIM)  # re-locked; the tool's own constants
     assert scan_for(copy_of_the_kit, scanned, ("kitpkg",), verbatim) == []
-    # the maintainer's name is in the documents and rules; hook messages keep the role phrase
-    assert scan_for(copy_of_the_kit, scanned, ("the maintainer",), (*verbatim, "*.py")) == []
+    # the maintainer's name is in the documents and rules; hook messages keep the role phrase, and
+    # so do the skills (they name no person: AGENTS.md's Roles section says who the maintainer is)
+    allowed = (*verbatim, "*.py", ".claude/skills/*")
+    hits = scan_for(copy_of_the_kit, scanned, ("the maintainer",), allowed)
+    # in backticks the phrase is the skills' term for the role, left as it is (`_maintainer`)
+    outside_code = [
+        hit
+        for hit in hits
+        for path, number, _ in [hit.split(":", 2)]
+        for line in [(copy_of_the_kit / path).read_text("utf-8").splitlines()[int(number) - 1]]
+        if "the maintainer" in re.sub(r"`[^`\n]*`", "", line).lower()
+    ]
+    assert outside_code == []
+    agents = (copy_of_the_kit / "AGENTS.md").read_text("utf-8")
+    assert "`the maintainer` is Ada Lovelace" in agents  # the term in backticks, then the name
+    assert agents.count("the maintainer") == 1
     check_all(copy_of_the_kit)  # every knob's sites agree in the project too
     assert "Next steps for Ada Lovelace:" in result.stdout
-    assert "make prove" not in result.stdout  # no such target yet (brief 004)
+    assert "make prove" not in result.stdout  # no such target yet (brief 005)
 
 
 def test_init_with_another_base_and_prefix_rewrites_the_rules(copy_of_the_kit: Path) -> None:
@@ -501,7 +516,16 @@ def test_a_rendered_projects_harness_tests_pass_with_other_names(tmp_path: Path)
     git(rendered, "commit", "-q", "-m", "rendered")
     # the modules whose data names a branch or reads a knob; the guard's 600 cases and the
     # integrity tests build their own repositories and are not worth the 20 s here
-    modules = ["test_stop_gate.py", "test_review.py", "test_knobs.py", "test_gate_lists.py"]
+    modules = [
+        "test_stop_gate.py",
+        "test_review.py",
+        "test_knobs.py",
+        "test_gate_lists.py",
+        # the role skills are the same text in every project; pr.py reads the page's headings
+        "test_roles.py",
+        "test_pr.py",
+        "test_role_skills.py",
+    ]
     # with the reviewer-clone marker set, as in a reviewer's own `make check`: the fixture in the
     # rendered conftest removes it, so the Stop gate's tests there still see the gate
     env = {**os.environ, stop_gate.REVIEWER_CLONE_VARIABLE: "1"}
@@ -523,6 +547,22 @@ def test_a_rendered_projects_harness_tests_pass_with_other_names(tmp_path: Path)
         env=env,
     )
     assert result.returncode == 0, result.stdout[-3000:] + result.stderr[-1000:]
+
+
+def test_render_text_leaves_the_skills_alone_and_renders_the_roles_line() -> None:
+    """Skills name no person and no project, so that they are the same text in every project and
+    in the source they came from; `AGENTS.md`'s Roles section is where a project's names go, with
+    the skills' two terms in backticks, which the renderer leaves alone."""
+    skills = sorted(p for p in kit.tracked_files(ROOT) if p.startswith(".claude/skills/"))
+    assert len(skills) > 10
+    for path in skills:
+        text = (ROOT / path).read_text("utf-8")
+        assert kit.render_text(path, text, LONG_NAMES) == text, path
+    roles = (ROOT / "AGENTS.md").read_text("utf-8").split("\n## ")[1]
+    rendered = kit.render_text("AGENTS.md", roles, LONG_NAMES)
+    assert "`the maintainer` is Ada Lovelace" in rendered
+    assert "`the base branch` is `release/2026-stable`" in rendered
+    assert "`feature/units-NNN-slug`" in rendered
 
 
 def test_render_refuses_the_kit_itself_and_a_folder_without_a_repository(

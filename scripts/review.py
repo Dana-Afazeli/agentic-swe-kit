@@ -58,7 +58,12 @@ from typing import cast
 
 ROOT = Path(__file__).resolve().parents[1]
 # What the code reviewer is told on top of the bundled skill's own instructions.
-PROTOCOL = ROOT / ".claude" / "skills" / "review-loop" / "references" / "code-review-protocol.md"
+PROTOCOL = ROOT / ".claude" / "skills" / "reviewer" / "references" / "correctness.md"
+# All the tools the conformance reviewer starts with: it reads files, and reads git and the PR
+# through Bash. Edit and Write are not among them; Bash is, and a shell can write: that the
+# reviewer only reads is asked of it, and its clone keeps a write away from everyone else
+# (docs/kit/research/2026-10-10-the-conformance-reviewer-without-an-agent-file.md).
+PLAN_TOOLS = "Read,Grep,Glob,Bash"
 PLACEHOLDERS = ("PR", "REPO", "OWNER", "NAME", "HEAD", "BASE", "ROUND", "ROUNDS", "PROBES")
 WORK = Path(tempfile.gettempdir()) / "kitpkg-review"  # knob: package
 BRANCH_PREFIX = "main"  # knob: prefix — unit branches are `<prefix>-NNN-slug`
@@ -358,7 +363,9 @@ def claude_argv(
 ) -> list[str]:
     """The command line of one reviewer process. Model and effort are always named."""
     if reviewer == "plan":
-        start = ["claude", "-p", "--agent", "plan-reviewer"]
+        # No agent file says who runs: the tools are named here (PLAN_TOOLS). What the process
+        # does is the reviewer skill, which its prompt starts.
+        start = ["claude", "-p", "--tools", PLAN_TOOLS]
         extra: list[str] = []
     else:
         start = ["claude", "-p", f"/code-review {spec.effort} --comment {pr.number}"]
@@ -388,7 +395,11 @@ def claude_argv(
 
 def plan_prompt(pr: PullRequest, brief: Path, round_: int, rounds: int) -> str:
     # The base as the clone has it: there is no local branch of that name to be missing or stale.
-    parts = [f"Brief: {brief}", f"PR: {pr.number} (head {pr.head}, base origin/{pr.base})"]
+    parts = [
+        "/reviewer conformance",
+        f"Brief: {brief}",
+        f"PR: {pr.number} (head {pr.head}, base origin/{pr.base})",
+    ]
     if round_ > 1:
         parts.append(
             f"Round {round_} of at most {rounds}. Your reports from the rounds before are "

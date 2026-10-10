@@ -66,6 +66,11 @@ LABELS = (
         "The maintainer approved a removed/skipped test or an added escape-hatch comment "
         "in this PR",
     ),
+    (
+        "scope-approved",
+        "5319E7",
+        "The maintainer approved the work beyond the brief that this PR's page lists",
+    ),
 )
 
 
@@ -141,6 +146,8 @@ SHADOWED = frozenset(
         "integrity",
         "mutation_gate",
         "review",
+        "roles",
+        "pr",  # the implementer skill's script, on the test path too
     }
     | {"tests", "scripts", "docs", "src"}
 )
@@ -183,7 +190,6 @@ KIT_OWNED = (
     ".claude/*",
     ".github/workflows/ci.yml",
     ".github/actions/*",
-    ".github/pull_request_template.md",
     ".pre-commit-config.yaml",
     "scripts/*",
     "tests/harness/*",
@@ -192,7 +198,6 @@ KIT_OWNED = (
     ".gitignore",
     ".python-version",
     "docs/kit/*",
-    "docs/briefs/000-TEMPLATE.md",
     "docs/decisions/0000-TEMPLATE.md",
 )
 MIXED = ("pyproject.toml",)
@@ -218,7 +223,7 @@ KIT_ONLY_FIRST = (
 )
 KIT_ONLY = (
     "docs/decisions/*",
-    "docs/briefs/*",  # the kit's own briefs; a project starts with the template alone
+    "docs/briefs/*",  # the kit's own briefs; a project's first comes from the brief-writer skill
     "docs/templates/*",
 )
 # Copied as they are: this file's constants *are* the kit's placeholders, and rendering it would
@@ -308,8 +313,16 @@ def _base_in_text(text: str, a: Answers) -> str:
 def _maintainer(text: str, a: Answers) -> str:
     if a.maintainer == PLACEHOLDER.maintainer:
         return text  # the role phrase stays, in both cases
-    # `\s+`: hard-wrapped prose may break the phrase over a line end; the name joins the lines
-    return re.sub(r"\b[Tt]he\s+maintainer\b", lambda _: a.maintainer, text)
+    # In backticks the phrase is the skills' term for the role (`the maintainer`), not the person:
+    # it stays. Elsewhere, `\s+`: hard-wrapped prose may break the phrase over a line end; the
+    # name joins the lines.
+    spans = re.split(r"(`[^`\n]*`)", text)
+    return "".join(
+        span
+        if span.startswith("`")
+        else re.sub(r"\b[Tt]he\s+maintainer\b", lambda _: a.maintainer, span)
+        for span in spans
+    )
 
 
 # Never in a .py file: the Python knob sites are the `# knob:` lines, and anything else a name
@@ -338,6 +351,10 @@ RULES: tuple[Rule, ...] = (
 def render_text(path: str, text: str, answers: Answers) -> str:
     """The kit file `path` with `text`, as the project with `answers` has it."""
     if path in VERBATIM:
+        return text
+    if path.startswith(".claude/skills/"):
+        # skills name no person and no project, so that they are the same text in every project
+        # (and in the source they came from); AGENTS.md's Roles section says who and which here
         return text
     if path == ".python-version":
         return answers.python + "\n"
@@ -607,7 +624,9 @@ def init(args: argparse.Namespace) -> int:
         steps.append("In the development checkout only: `uv run prek install`.")
     if "\nprove:" in (root / "Makefile").read_text("utf-8"):
         steps.append("`make prove` — every gate shown red on a planted defect, on this machine.")
-    steps.append("Read docs/kit/SETUP.md; write the first brief from docs/briefs/000-TEMPLATE.md.")
+    steps.append(
+        "Read docs/kit/SETUP.md; write the first brief with `/brief-writer` in a fresh session."
+    )
     print_next_steps(answers.maintainer, steps)
     return status
 
@@ -1230,7 +1249,7 @@ def parser() -> argparse.ArgumentParser:
 
     p_init = sub.add_parser("init", help="render the placeholders in this clone of the kit, once")
     answers_options(p_init)
-    p_init.add_argument("--labels", action="store_true", help="create the three labels with gh")
+    p_init.add_argument("--labels", action="store_true", help="create the labels with gh")
     p_init.add_argument(
         "--hooks", action="store_true", help="install the git hooks (uv run prek install)"
     )
@@ -1246,7 +1265,7 @@ def parser() -> argparse.ArgumentParser:
     p_render.add_argument("--into", required=True, help="the directory to write")
     p_render.set_defaults(func=render_command)
 
-    p_labels = sub.add_parser("labels", help="create the three labels with gh")
+    p_labels = sub.add_parser("labels", help="create the labels with gh")
     p_labels.set_defaults(func=labels_command)
 
     p_update = sub.add_parser(

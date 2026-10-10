@@ -8,7 +8,7 @@
 
 | Document | What it is |
 |---|---|
-| `AGENTS.md` | The rules a Claude Code session loads when it works here: the gate, TDD, the work protocol |
+| `AGENTS.md` | What every Claude Code session loads here: which skill is its role, the gate, the rules every role shares |
 | `docs/kit/PHILOSOPHY.md` · `docs/kit/WORKFLOW.md` · `docs/kit/HARNESS.md` | Why and how we work, and the harness that enforces it (kit-owned; updated by `kit.py update`) |
 | `docs/DELTAS.md` | Where this project deviates from the kit, and why |
 | `docs/ROADMAP.md` | What we build, phase by phase, with exit criteria — the living status |

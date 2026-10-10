@@ -3,8 +3,8 @@
 A maintained template for building software with coding agents the way we have found it has to be
 done to stay in control: **one gate the agent can run, two human decisions per unit of work, and
 every rule that matters enforced by a machine rather than asked for in prose.** The kit is the
-code form of that philosophy: the gates, the Claude Code hooks, the CI jobs, the review loop, the
-templates and the documents, proven on a real project and extracted here so that the next project
+code form of that philosophy: the gates, the Claude Code hooks, the CI jobs, the role skills, the
+review loop, the templates and the documents, proven on a real project and extracted here so that the next project
 starts with all of it instead of rebuilding it.
 
 **Status:** living. The kit is itself a working project: its own `make check`, `make prove` and CI
@@ -26,7 +26,7 @@ run on every change to it. `CHANGELOG.md` says what changed between versions.
 6. **Maker ≠ checker.** Reviews run as separate processes on a named model and effort, in a
    throwaway clone; a finding is a hypothesis the implementer reproduces before changing anything.
 7. **Context is a budget.** One fresh session per brief; state lives in files and git; one session
-   per checkout; `AGENTS.md` stays under 100 lines and is pruned weekly.
+   per checkout; `AGENTS.md` stays under 85 lines: what every role needs, the rest in each role's skill.
 8. **Nets, not walls.** Each hook says what it stops and what gets through; CI and the human read
    are the wall.
 9. **Compound from real friction.** Every correction becomes a hook, a test, a rule or a skill —
@@ -46,11 +46,11 @@ The long version, with the reasoning and what the friction taught: **`docs/kit/P
    `init` renames the sample package, rewrites every knob (base branch, branch prefix, maintainer),
    seeds `README.md`, `project.mk`, `docs/DELTAS.md`, `docs/ROADMAP.md`, the friction log and the
    backlog, writes `kit.lock` (your answers and the kit version), re-locks, and runs `make check`.
-   `--labels` creates the three labels with `gh`; `--hooks` installs the git hooks (development
+   `--labels` creates the four labels with `gh`; `--hooks` installs the git hooks (development
    checkout only).
 3. Prove the gates on your machine: `make prove`.
-4. Commit, push, and write the first brief from `docs/briefs/000-TEMPLATE.md`. `docs/kit/SETUP.md`
-   has the full checklist, including what to customise and where (never in kit-owned files).
+4. Commit, push, and run `/brief-writer` in a fresh Claude Code session: it interviews you and opens
+   the first brief as a draft PR. `docs/kit/SETUP.md` has the full checklist, including what to customise and where (never in kit-owned files).
 
 Prerequisites: `git`, [`uv`](https://docs.astral.sh/uv/), `gh`, and the Claude Code CLI. Python is
 installed by `uv` from `.python-version`. Nothing is installed globally.
@@ -77,11 +77,11 @@ conflict markers that `update` lists. The result is a PR that touches gate files
 | `make prove` | every gate shown red on a planted defect, then green on the clean tree |
 | `.claude/settings.json` | allow/ask/deny rules and three hooks: a Bash guard (PreToolUse), a format hook (PostToolUse), a Stop gate that runs `make check` |
 | `scripts/` | the hooks, `integrity.py`, `mutation_gate.py`, and `review.py`, which starts the two PR reviewers as headless processes |
-| `.claude/skills/review-loop` · `.claude/agents/plan-reviewer.md` | the review loop and the conformance reviewer |
+| `.claude/skills/` | the three roles as skills — `brief-writer`, `implementer`, `reviewer` — with numbered rules, their templates (the brief, the page) and `pr.py`; and `review-loop`, which starts the reviewers |
 | `.github/workflows/ci.yml` | jobs `check`, `mutation`, `secrets`, `integrity`, `gate-guard`, `prove` |
-| `AGENTS.md` | what a Claude Code session loads here: the gate, the TDD protocol, the work protocol |
+| `AGENTS.md` | what every session loads here: which skill is its role, the gate, the rules every role shares |
 | `docs/kit/` | `PHILOSOPHY.md`, `WORKFLOW.md`, `HARNESS.md`, `SETUP.md`, dated research notes |
-| templates | the brief (`docs/briefs/000-TEMPLATE.md`), the ADR, the PR, and the project files `init` seeds |
+| templates | the brief and the page (in the skills' `assets/`), the ADR (`docs/decisions/0000-TEMPLATE.md`), and the project files `init` seeds |
 
 ## Map of the documents
 
