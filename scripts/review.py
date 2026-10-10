@@ -12,7 +12,7 @@ whether the commits since it changed what that reviewer reviewed is the caller's
 Why a process of its own: inside a session `/code-review` runs as a subagent whose model falls
 through to `CLAUDE_CODE_SUBAGENT_MODEL` (pinned to Sonnet in `.claude/settings.json`), and the Skill
 tool takes no model. `claude -p` takes `--model` and `--effort`, and `--settings` overrides the pin
-for that one process (docs/kit/research/2026-10-05-review-model-and-effort.md).
+for that one process.
 
 One call reads the PR's record comments, then runs each reviewer that is not green and has rounds
 left: plan-reviewer first, then `/code-review <effort> --comment <pr>`. For each run it reads off
@@ -21,9 +21,8 @@ and what to do next. The record comments are the memory between rounds: nothing 
 
 Each reviewer works in a clone of its own: of the PR's branch as GitHub has it, at the PR's head,
 with its own environment, made for the call and removed after it. So a review does not depend on
-what any session does to this checkout meanwhile (on 2026-10-05 another session switched its branch
-37 s into a review), what a reviewer writes, commits or switches in its working tree stays in the
-clone, and the caller may go on working while a review runs.
+what any session does to this checkout meanwhile; what a reviewer writes, commits or switches in
+its working tree stays in the clone; and the caller may go on working while a review runs.
 
 A reviewer process has no advisor and no MCP servers, and is stopped at a spending cap and a time
 limit. The rest are nets, not walls, because the process runs as the user, with the user's
@@ -61,8 +60,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL = ROOT / ".claude" / "skills" / "reviewer" / "references" / "correctness.md"
 # All the tools the conformance reviewer starts with: it reads files, and reads git and the PR
 # through Bash. Edit and Write are not among them; Bash is, and a shell can write: that the
-# reviewer only reads is asked of it, and its clone keeps a write away from everyone else
-# (docs/kit/research/2026-10-10-the-conformance-reviewer-without-an-agent-file.md).
+# reviewer only reads is asked of it, and its clone keeps a write away from everyone else.
 PLAN_TOOLS = "Read,Grep,Glob,Bash"
 PLACEHOLDERS = ("PR", "REPO", "OWNER", "NAME", "HEAD", "BASE", "ROUND", "ROUNDS", "PROBES")
 WORK = Path(tempfile.gettempdir()) / "kitpkg-review"  # knob: package
@@ -226,7 +224,7 @@ def select(
 
     A reviewer stops when it is green or has used `rounds` rounds. A green stands when commits
     land after it, and the note then says that the head has moved: whether those commits changed
-    what the reviewer reviewed is the caller's judgment (decided 2026-10-06), and `expired` names
+    what the reviewer reviewed is the caller's judgment, and `expired` names
     the reviewers for which it decided so. The round limit stands either way.
     """
     to_run: list[tuple[str, int]] = []
@@ -307,7 +305,7 @@ def read_outcome(lines: Iterable[str], reviewer: str) -> Outcome:
     The plan reviewer is the session itself, so its turns are the main ones; the code review runs
     as the bundled skill's subagent, so its turns are the ones with a parent. The models that
     answered are counted and reported, and judged by nobody: the caller named the model when it
-    started the reviewer, and that is the requirement (decided 2026-10-06).
+    started the reviewer, and that is the requirement.
     """
     answered: Counter[str] = Counter()
     advisor_calls = 0
@@ -461,7 +459,7 @@ def next_step(
 
     A reviewer the call left out (`--only`) is still waited for. The one exception is a reviewer
     that cannot run at all, `unable`: on a PR without a brief plan-reviewer has nothing to check,
-    and asking for it would send the caller round in a circle (PR #11 review, rounds 2 and 3).
+    and asking for it would send the caller round in a circle.
     """
     if any(verdicts[reviewer] == "failed" for reviewer in ran):
         return (
@@ -516,7 +514,7 @@ def run_in_root(args: list[str]) -> CompletedProcess[str]:
 
 
 # The Stop hook (scripts/stop_gate.py) reads this: a reviewer changes nothing, so the branch's own
-# red — a renamed test awaiting the label — must not keep it from stopping (PR 1 of the kit).
+# red — a renamed test awaiting the label — must not keep it from stopping.
 REVIEWER_CLONE_VARIABLE = "KIT_REVIEWER_CLONE"
 
 

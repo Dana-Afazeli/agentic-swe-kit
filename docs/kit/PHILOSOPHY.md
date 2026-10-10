@@ -5,9 +5,8 @@
 
 This document is the reasoning behind every file in the kit. `WORKFLOW.md` says how work flows,
 `HARNESS.md` what each gate and hook does, `SETUP.md` how to apply the kit. This one says *why*,
-and what the friction taught while the harness was built on a real project in September and
-October 2026. If a rule here seems arbitrary, the friction log of that project probably holds the
-incident that produced it.
+and what the friction of building a harness on a real project taught. If a rule here seems
+arbitrary, read the reasoning under it before changing it.
 
 ## 1. Where this comes from
 
@@ -70,10 +69,9 @@ path from a red gate to a green one is to edit the gate.
 run: `rm` on a tracked file, a shell write to a gate file, `git commit --no-verify`, a force-push, a
 push that lands on the base branch, a change of labels. It is read in one pass the way the shell
 reads it, and it is still not a wall: `find -delete`, a script that calls `gh`, a variable that
-expands to a command's name all get through. The texts say so, by name. Twice during the build, a
-text called a net a wall, and twice the next review round broke it in a sandbox. The rule since:
-before writing "cannot", try one spelling that does not go through the mechanism the claim rests
-on. **CI and the maintainer's read are the wall**; the guard exists to stop the habit early and to
+expands to a command's name all get through. The texts say so, by name. A text that calls a net a
+wall is broken by the next review round in a sandbox. The rule: before writing "cannot", try one
+spelling that does not go through the mechanism the claim rests on. **CI and the maintainer's read are the wall**; the guard exists to stop the habit early and to
 make the agent say so when it is refused.
 
 **The hook fails closed.** A hook that raises an exception exits with code 1, and Claude Code treats
@@ -111,10 +109,9 @@ test IDs the gate ran at the base with the ones it runs now, and lists vanished 
 new escape-hatch comments (`# noqa`, `# type: ignore`, `# pragma: no cover`, `# pragma: no mutate`,
 …) — whatever tool made the change. The CI job runs it and is red until the maintainer labels
 `checks-weakened-approved`; the agent runs it itself before marking the PR ready. The Stop hook
-used to run the test half, so the session heard about it at once — and held every session on a
-branch that removed a test on purpose, the reviewers' too, until a label only the maintainer adds:
-a hold the held party cannot lift is a stall, not a gate (ADR-0008). The merge waits for the
-maintainer; the session does not. A legitimate rename costs one label and one sentence in the PR. The
+does not run the test half: it would hold every session on a branch that removed a test on
+purpose, the reviewers' too, until a label only the maintainer adds, and a hold the held party
+cannot lift is a stall, not a gate. The merge waits for the maintainer; the session does not. A legitimate rename costs one label and one sentence in the PR. The
 assertion-level case (a test kept, its assertion gutted) is what the mutation gate is for.
 
 The escalation for high-stakes units — a separate session writes acceptance tests the implementer
@@ -129,14 +126,14 @@ puts everything a session needs in the repository, never in a conversation:
 
 - **A fresh session per brief.** The brief is self-contained: an implementer sees the brief and the
   repo, never the planning conversation. A planning session's memory is not where requirements
-  live — a requirement parked in a session's notes was lost once, and the rule "state lives in files
-  and git" came from it.
+  live — a requirement parked in a session's notes is lost with the session, which is why state
+  lives in files and git.
 - **One session per checkout.** A working directory belongs to the session that runs in it. A branch
-  switch changes what every process in that folder sees: on 2026-10-02 a planning session switched
-  branches in a folder where an implementer was working, and the implementer's committed files
-  vanished from its working tree mid-run. A second session that needs the repo clones its own copy.
-  The reviewers get a throwaway clone of the PR's head for the same reason; a review no longer
-  depends on what any session does to any checkout.
+  switch changes what every process in that folder sees: a planning session that switches branches
+  in a folder where an implementer is working makes the implementer's committed files vanish from
+  its working tree mid-run. A second session that needs the repo clones its own copy. The reviewers
+  get a throwaway clone of the PR's head for the same reason; a review does not depend on what any
+  session does to any checkout.
 - **`AGENTS.md` ≤ 85 lines**, loaded at session start, pruned weekly with one question per line:
   would removing it cause a mistake? There is no `CLAUDE.md` in a kit project: Claude Code reads
   `AGENTS.md` only when no `CLAUDE.md` exists, so the second file would silence the first.
@@ -153,9 +150,9 @@ conformance reviewer has no agent file: the launcher names its tools (`--tools R
 because a file under `.claude/agents/` would let any session spawn that reviewer as an agent, past
 the launcher's cost cap and time limit. Both run as **processes of
 their own** (`claude -p`), each on a model and effort the brief names, because inside a session a
-skill answers on the project's pinned subagent model whatever is asked for; for seven review rounds
-nobody noticed that "Opus" had answered on Sonnet. The launcher has no default model: a reviewer
-whose model nobody named does not start.
+skill answers on the project's pinned subagent model whatever is asked for, and nothing in the
+answer says so. The launcher has no default model: a reviewer whose model nobody named does not
+start.
 
 A reviewer's finding is a **hypothesis**. The implementer reproduces it before changing anything,
 decides fix / reject with evidence / park / escalate, fixes with a failing test first, and answers
@@ -202,7 +199,7 @@ the same branch; brief and code merge together, so every unit carries its own re
 ## 11. Models and cost
 
 Every spawned agent names its model and effort; nothing inherits, because one forgotten override on
-a fan-out once cost an order of magnitude more than intended. The policy the kit ships: Sonnet at
+a fan-out costs an order of magnitude more than intended. The policy the kit ships: Sonnet at
 medium effort by default; Opus at high for a single hardest-judgment agent, never a fan-out; the
 largest models only as reviewers of hard or high-stakes work, and stingily; Haiku only for
 mechanical steps. `.claude/settings.json` pins the built-in subagents to Sonnet; a spawn overrides

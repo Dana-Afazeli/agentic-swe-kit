@@ -31,8 +31,8 @@ the guard's tests ask every installed shell, so both zsh and bash are fine.
 4. Commit, and push that commit **straight to the base branch** — the one time anything does. The
    template commit is not yet your project: CI's integrity check compares a PR with it and would
    show the kit's own tests (`test_kit.py`, the renamed sample tests) as vanished. (The Stop hook
-   does not look at vanished tests — ADR-0008 — so a session in the checkout can stop; `init` from a
-   terminal is still the simpler way.)
+   does not look at vanished tests, so a session in the checkout can stop; `init` from a terminal
+   is still the simpler way.)
 5. Open `README.md` (now your project's) and `docs/ROADMAP.md`; then run `/brief-writer` in a
    fresh session: it interviews you and opens the first brief as a draft PR. From here on, every
    change is a PR.
@@ -52,8 +52,8 @@ checkout"). Secrets live outside the repository (`~/.config/<name>/…`), never 
 - When a PR touches a gate file, CI is red until the maintainer labels `gates-approved` after
   reading the diff; a later push to a gate file removes the label again.
 - When a test vanished or a skip or escape-hatch comment was added, CI's `integrity` job is red
-  until the maintainer labels `checks-weakened-approved`. The Stop hook does not check this
-  (ADR-0008): run `scripts/integrity.py --base origin/<base>` yourself before `gh pr ready`.
+  until the maintainer labels `checks-weakened-approved`. The Stop hook does not check this: run
+  `scripts/integrity.py --base origin/<base>` yourself before `gh pr ready`.
 - Friction goes in `docs/FRICTION.md` as it happens; the weekly outer loop turns it into enforcement.
 
 ## 4. Customising — where things go
@@ -74,6 +74,7 @@ The rule that keeps updates painless: **never edit a kit-owned file to add proje
 | widen the mutation scope beyond `core/` | the `-- src/<pkg>/core` path in `ci.yml`'s mutation job |
 | add a dev dependency | `uv add --group dev <pkg>` (exempt from the guard; the lock is a gate file) |
 | record a fact about a tool | `docs/research/<date>-<topic>.md`, dated, `Status: snapshot` |
+| fix a kit-owned file | send the fix to the kit as a pull request: a local edit conflicts with the next update |
 
 Thresholds are starting points. Raise them from the friction log; never lower one in a feature PR.
 
@@ -101,13 +102,11 @@ Then `make prove`, open the PR, read the diff (it touches gate files: `gates-app
 
 When the version you move to has another `kit.py`, `update` runs that one — from the export,
 before anything is written — so the newer manifest decides what is kit-owned, and `kit.py` itself
-is merged like every other kit-owned file. A project made from the kit before `update` existed has
-a `kit.py` without the command: copy the kit's `kit.py` over yours first and commit, then run
-`update`.
+is merged like every other kit-owned file. A project whose `kit.py` has no `update` command: copy
+the kit's `kit.py` over yours first and commit, then run `update`.
 
 Two options for the unusual case. `--from <ref>`: the kit commit this project was rendered from,
-when the lock has none and the kit has no tag for the lock's version (a project made from the kit
-before its first release). `--to <ref>`: any kit ref — a tag, a branch, a commit — not only a
+when the lock has none and the kit has no tag for the lock's version. `--to <ref>`: any kit ref — a tag, a branch, a commit — not only a
 release; `update` refuses a target older than what you have. `--repo` points at another copy of
 the kit (a local clone, a fork). `status` fetches the kit too, so both need the network.
 
@@ -122,16 +121,3 @@ kit changed the same lines — that is the conflict `update` shows you.
 that every gate has code to bite on from the first commit — the coverage floor, the contract, the
 mutation gate and `make prove` all need something real. Replace them with your first unit; keep the
 layout (`core/` pure, `io/` boundaries, `main.py` wiring) or change the contract deliberately.
-
-## 7. Maintaining the kit itself
-
-The kit is a project under its own harness: briefs, PRs, the review loop, `gates-approved`.
-- A change is proven on the kit first (`make check`, `make prove`, CI), then released.
-- `CHANGELOG.md` has an `Unreleased` section; every PR adds its line there.
-- Release: bump `KIT_VERSION` in `kit.py`, move `Unreleased` under the version heading with the date,
-  merge, tag `vX.Y.Z` on `main`, `gh release create vX.Y.Z --notes-from-tag`. A test asserts the
-  changelog has a heading for `KIT_VERSION`.
-- Renaming or removing a kit-owned file: `update` adds the new path and deletes the old one only
-  where the project left it unchanged; say so in the changelog.
-- A fix a project made to a kit-owned file reaches the kit as a PR here, not as a local edit that
-  the next update will conflict with.

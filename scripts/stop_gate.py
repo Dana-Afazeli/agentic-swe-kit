@@ -4,9 +4,9 @@ Claude Code runs this when a turn is about to end. If code changed — on this b
 the base, or in the working tree — the hook runs `make check`. Exit 2 with the reason on stderr
 sends the session back to work; exit 0 lets it stop.
 
-A test that vanished or was skipped does not block the stop. It used to, until the label
-`checks-weakened-approved` was on the PR; that held every session on a branch that removed a test on
-purpose, the reviewers' sessions too (ADR-0008). That check is now the CI job `integrity`'s alone
+A test that vanished or was skipped does not block the stop: that would hold every session on a
+branch that removed a test on purpose, the reviewers' sessions too, until the label
+`checks-weakened-approved` is on the PR. That check is the CI job `integrity`'s alone
 (`scripts/integrity.py`), which keeps the merge, and not the session, waiting for the maintainer.
 
 There is deliberately no `stop_hook_active` bypass: the hook never reads its input. A bypass
@@ -46,8 +46,8 @@ GATED_FILES = frozenset(
 TAIL_LINES = 40
 # Set by scripts/review.py in the environment of a reviewer process. A reviewer works in a
 # throwaway clone of the PR's head and changes nothing; a red gate on the PR under review is the
-# author's to pass. Before this marker, the branch's own red kept both reviewers of the kit's PR 1
-# from ever stopping, until the launcher's time limit ended them.
+# author's to pass. Without this marker, the branch's own red would keep both reviewers from ever
+# stopping, until the launcher's time limit ended them.
 REVIEWER_CLONE_VARIABLE = "KIT_REVIEWER_CLONE"
 
 Runner = Callable[[list[str]], CompletedProcess[str]]
