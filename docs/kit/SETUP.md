@@ -22,7 +22,8 @@ the guard's tests ask every installed shell, so both zsh and bash are fine.
    - `--maintainer`: replaces the role phrase "the maintainer" in the texts the agents read.
    - `--base`: the branch PRs merge into (the kit's default is main); `--branch-prefix`: unit
      branches are `<prefix>-NNN-slug` (default = the base).
-   - `--labels`: creates `brief-approved`, `gates-approved`, `checks-weakened-approved` with `gh`.
+   - `--labels`: creates `brief-approved`, `gates-approved`, `checks-weakened-approved` and
+     `scope-approved` with `gh`.
    - `--hooks`: `uv run prek install` — only in the development checkout.
    `init` seeds the project-owned files from `docs/templates/`, removes the kit-only files, writes
    `kit.lock`, runs `uv lock`, `uv sync --all-groups` and `make check`, and prints the next steps.
@@ -32,8 +33,9 @@ the guard's tests ask every installed shell, so both zsh and bash are fine.
    show the kit's own tests (`test_kit.py`, the renamed sample tests) as vanished. (The Stop hook
    does not look at vanished tests — ADR-0008 — so a session in the checkout can stop; `init` from a
    terminal is still the simpler way.)
-5. Open `README.md` (now your project's) and `docs/ROADMAP.md`; write the first brief from
-   `docs/briefs/000-TEMPLATE.md` as a draft PR. From here on, every change is a PR.
+5. Open `README.md` (now your project's) and `docs/ROADMAP.md`; then run `/brief-writer` in a
+   fresh session: it interviews you and opens the first brief as a draft PR. From here on, every
+   change is a PR.
 
 Checkouts: develop in one clone; if the project runs something, run it from a second clone pinned to
 the base branch. Never two Claude Code sessions in one folder (`WORKFLOW.md`, "One session per
@@ -41,8 +43,10 @@ checkout"). Secrets live outside the repository (`~/.config/<name>/…`), never 
 
 ## 3. Day to day
 
-- A unit of work starts as a brief in a draft PR; the maintainer labels it `brief-approved`; a fresh
-  session executes it; the review loop runs; the maintainer merges. `WORKFLOW.md` has the loop.
+- A unit of work starts as a brief in a draft PR (`/brief-writer`); the maintainer labels it
+  `brief-approved`; a fresh session runs `/implementer NNN`; the review loop runs; the maintainer
+  reads the page and merges. `WORKFLOW.md` has the loop. The roles are skills under
+  `.claude/skills/`: editing one changes how that role works, in this project and after an update.
 - `make check` is the gate; the Stop hook runs it. `make mutate` on `core/` changes. `make fmt`
   rewrites files on purpose; nothing else does.
 - When a PR touches a gate file, CI is red until the maintainer labels `gates-approved` after

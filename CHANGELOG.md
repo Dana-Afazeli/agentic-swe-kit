@@ -8,6 +8,21 @@ moves to.
 ## Unreleased
 
 ### Changed
+- The three roles are skills under `.claude/skills/` — `brief-writer` (`/brief-writer`),
+  `implementer` (`/implementer NNN`), `reviewer` (started by the launcher) — each the whole procedure
+  of its work with numbered rules (`B-`, `I-`, `P-`, `C-`); `scripts/roles.py` lists the 44 rules and
+  fails when a skill's text and its table disagree (ADR-0009, adopted from the source project). The
+  brief template is `brief-writer/assets/brief.md`, the PR description is **the page**
+  (`implementer/assets/pr-page.md`, ≤ 80 lines for the maintainer, then the reference parts) set by
+  `implementer/scripts/pr.py page`, and the proofs are one PR comment (`pr.py proofs`). The
+  conformance reviewer has no agent file: `scripts/review.py` starts it with
+  `--tools Read,Grep,Glob,Bash` and a prompt that begins `/reviewer conformance`; the code review's
+  protocol is `reviewer/references/correctness.md`. `AGENTS.md` keeps what every role needs (≤ 85
+  lines) and opens with "Roles". A fourth label, `scope-approved`, carries the maintainer's yes to
+  work beyond a brief. `kit.py` renders nothing under `.claude/skills/` (skills name no person and
+  no project; `AGENTS.md`'s Roles line says who and which), and leaves "the maintainer" in backticks
+  alone everywhere. Removed: `.claude/agents/plan-reviewer.md`, `.github/pull_request_template.md`,
+  `docs/briefs/000-TEMPLATE.md`, `review-loop/references/code-review-protocol.md` (each moved).
 - The Stop hook runs `make check` and nothing else (ADR-0008, after the source project's ADR-0010):
   the vanished-test check and the label `checks-weakened-approved` are CI's `integrity` job's alone,
   which holds the merge; the hook no longer holds a session on a branch that removed a test on

@@ -30,11 +30,11 @@ puts every rule that matters in the second category and keeps the first category
 | Principle | What it buys | Where it lives in the kit |
 |---|---|---|
 | A check the agent can run | "Looks done" stops being the only signal | `make check`: lint, strict types, import contracts, tests with a branch-coverage floor; one command, deterministic, proven to fail |
-| Short instructions file | Context spent only on what the code cannot say | `AGENTS.md` ≤ 100 lines, pruned weekly; no nested files until friction demands one |
+| Short instructions file | Context spent only on what the code cannot say | `AGENTS.md` ≤ 85 lines — what every role needs; what one role needs lives in that role's skill — pruned weekly |
 | Maker ≠ checker | The model that wrote the code does not grade it | `scripts/review.py` starts the reviewers as separate processes, in a throwaway clone, on a named model |
-| Human gate at the PR | The maintainer reads every diff while no verifier has earned trust | One PR per unit, a walkthrough written for the maintainer, the maintainer merges |
+| Human gate at the PR | The maintainer reads every diff while no verifier has earned trust | One PR per unit, a page of at most 80 lines written for the maintainer, the maintainer merges |
 | Context as a budget | No kitchen-sink sessions | A fresh session per brief; state lives in files and git; one session per checkout |
-| Someone can explain the code | The maintainer owns the design, not only the output | A walkthrough in every PR; small units; a decision record for every decision |
+| Someone can explain the code | The maintainer owns the design, not only the output | A page in every PR; small units; a decision record for every decision |
 | Enforce, don't advise | Corrections become machine checks | Hooks, import contracts, the coverage floor, the mutation gate, CI, permission rules |
 | Compound | Each unit leaves the repo easier for the next agent | The friction log, the compounding step of the inner loop, the skills folder |
 
@@ -45,6 +45,9 @@ is it specified as tests?) and **the merge** (does the diff do what the brief sa
 it?). Everything between — implementation, review, fixing, answering review comments — is agents
 and machines. The labels make the two gates visible and machine-checkable: `brief-approved` on the
 draft PR releases the implementer; the merge is the maintainer's alone (`gh pr merge` always asks).
+A fourth label, `scope-approved`, carries the maintainer's yes to work beyond a brief onto the PR:
+the implementer lists the work on the page with the maintainer's words, and the conformance reviewer
+counts it as a finding only without the list or the label.
 
 Why not more gates? Each one costs the maintainer's attention, which is the scarcest resource in a
 one-person project; and every gate the agent can satisfy by itself is not a gate. Why not fewer? Because
@@ -98,7 +101,7 @@ the acceptance criteria as concrete test cases (literal inputs, expected outputs
 name) and the public interface, precisely enough that someone who never saw the implementation
 could write the tests; the **implementer** writes those tests first and shows them failing, then the
 code; the **mutation gate** checks that the tests bite (a surviving mutant fails the PR); the
-**fresh-context plan-reviewer** maps each criterion to a test and flags tautologies.
+**conformance reviewer**, a fresh process, maps each criterion to a test and flags tautologies.
 
 Agents are known to delete a failing test instead of fixing the code. The first design blocked the
 *edit* — a removed `def test_`, an added skip, a shrinking test file — and did not survive a closer
@@ -134,7 +137,7 @@ puts everything a session needs in the repository, never in a conversation:
   vanished from its working tree mid-run. A second session that needs the repo clones its own copy.
   The reviewers get a throwaway clone of the PR's head for the same reason; a review no longer
   depends on what any session does to any checkout.
-- **`AGENTS.md` ≤ 100 lines**, loaded at session start, pruned weekly with one question per line:
+- **`AGENTS.md` ≤ 85 lines**, loaded at session start, pruned weekly with one question per line:
   would removing it cause a mistake? There is no `CLAUDE.md` in a kit project: Claude Code reads
   `AGENTS.md` only when no `CLAUDE.md` exists, so the second file would silence the first.
 - **Facts come from dated research notes**, not from the model's memory. The tools change monthly;
@@ -143,8 +146,12 @@ puts everything a session needs in the repository, never in a conversation:
 
 ## 8. Maker ≠ checker
 
-Two reviewers read every PR: the bundled `/code-review` for correctness, and `plan-reviewer` for
-conformance — does the diff do what the brief said, no less and no more. Both run as **processes of
+Two reviewers read every PR: the bundled `/code-review` for correctness, cleanness, maintainability
+and security, and the conformance review (`/reviewer conformance`) — does the diff do what the brief
+said, no less and no more, do its proofs hold, can the maintainer read its page cold. The
+conformance reviewer has no agent file: the launcher names its tools (`--tools Read,Grep,Glob,Bash`),
+because a file under `.claude/agents/` would let any session spawn that reviewer as an agent, past
+the launcher's cost cap and time limit. Both run as **processes of
 their own** (`claude -p`), each on a model and effort the brief names, because inside a session a
 skill answers on the project's pinned subagent model whatever is asked for; for seven review rounds
 nobody noticed that "Opus" had answered on Sonnet. The launcher has no default model: a reviewer
@@ -184,8 +191,8 @@ the backlog to the harness until the friction log shows it twice.
 ## 10. Documents have a status
 
 Every document opens with a status line, and the status is the contract. `living`: kept true, and
-whoever makes a statement in it false fixes it in the same PR (the PR template asks; the
-plan-reviewer checks). `snapshot (date)`: never edited; corrections go in a new file. `superseded
+whoever makes a statement in it false fixes it in the same PR (the page asks; the conformance
+reviewer checks). `snapshot (date)`: never edited; corrections go in a new file. `superseded
 by …` / `deprecated (date) — see …`: the old file stays one cycle with the pointer at the top, so a
 model that reaches it is redirected instead of misled. Decision records are never edited after
 acceptance except to add "Superseded by". **Briefs are pull requests**: the planning session opens

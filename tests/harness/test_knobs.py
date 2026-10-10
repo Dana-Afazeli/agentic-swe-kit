@@ -58,9 +58,8 @@ def check_prefix(root: Path) -> None:
         f"git push origin {prefix}-:*",
     ):
         assert f"Bash({allowed})" in rules(root, "allow")
+    # the skills say `<base>-NNN-slug`; AGENTS.md's Roles section is where the prefix is written
     assert f"`{prefix}-NNN-slug`" in (root / "AGENTS.md").read_text("utf-8")
-    template = (root / "docs/briefs/000-TEMPLATE.md").read_text("utf-8")
-    assert f"`{prefix}-NNN-<slug>`" in template
 
 
 def check_package(root: Path) -> None:

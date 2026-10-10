@@ -22,7 +22,7 @@ PR = PullRequest(
     branch="main-skill-x",
     url="https://github.com/o/r/pull/10",
 )
-BRIEF = "docs/briefs/000-TEMPLATE.md"  # a file the fake GitHub has at the PR's head
+BRIEF = "docs/briefs/000-notes.md"  # a file the fake GitHub has at the PR's head
 SONNET = "claude-sonnet-5-5"
 OPUS = "claude-opus-5-5"
 
@@ -81,7 +81,7 @@ def test_a_reviewer_that_will_not_run_needs_no_model(capsys: pytest.CaptureFixtu
 def test_the_brief_is_found_from_the_branch_number() -> None:
     # the names are those of `docs/briefs` at the PR's head, as GitHub lists them; the branch
     # carries the project's prefix (a knob), so the test reads it rather than spelling it
-    names = ["000-TEMPLATE.md", "006-dm-live.md", "007-other.md", "006-notes.txt"]
+    names = ["000-notes.md", "006-dm-live.md", "007-other.md", "006-notes.txt"]
     prefix = review.BRANCH_PREFIX
     assert review.find_brief(f"{prefix}-006-dm-live", names) == Path("docs/briefs/006-dm-live.md")
     assert review.find_brief(f"{prefix}-008-none", names) is None
@@ -376,9 +376,12 @@ def values(argv: list[str], name: str) -> list[str]:
     return argv[start:stop]
 
 
-def test_the_plan_reviewer_runs_as_its_agent_with_the_model_and_effort_named() -> None:
+def test_the_plan_reviewer_runs_with_no_agent_its_tools_and_the_model_and_effort_named() -> None:
+    """No agent file says who runs: the launcher names the tools (reading, and a shell for git and
+    gh), and the prompt starts the reviewer skill."""
     argv = review.claude_argv("plan", Spec("opus", "low"), PR, 2, budget=1.5, root=Path("/repo"))
-    assert argv[:4] == ["claude", "-p", "--agent", "plan-reviewer"]
+    assert argv[:4] == ["claude", "-p", "--tools", "Read,Grep,Glob,Bash"]
+    assert "--agent" not in argv
     assert (flag(argv, "--model"), flag(argv, "--effort")) == ("opus", "low")
     assert flag(argv, "--max-budget-usd") == "1.5"
     assert flag(argv, "-n") == "review-loop: plan-reviewer, PR 10, round 2"
@@ -402,6 +405,7 @@ def test_the_code_review_is_the_bundled_skill_with_the_effort_as_its_level() -> 
     assert flag(argv, "--add-dir") == "/work/probes"
     assert values(argv, "--allowedTools") == ["Bash(gh api:*)", "Write(//work/probes/**)"]
     assert "--agent" not in argv
+    assert "--tools" not in argv  # the bundled review keeps its own tools
 
 
 @pytest.mark.parametrize("reviewer", ["plan", "code"])
@@ -689,7 +693,7 @@ class Hub:
         comments: list[str] | None = None,
         post_fails: bool = False,
         inline_fails_from: int | None = None,
-        briefs: tuple[str, ...] = ("000-TEMPLATE.md",),
+        briefs: tuple[str, ...] = ("000-notes.md",),
         contents_error: str | None = None,
         origin: str = ORIGIN,
         clone_fails_from: int | None = None,
@@ -836,7 +840,7 @@ class Claude:
     def __call__(
         self, argv: list[str], prompt: str, run_dir: Path, cwd: Path, timeout_s: int
     ) -> int | None:
-        reviewer = "plan" if "--agent" in argv else "code"
+        reviewer = "plan" if "--tools" in argv else "code"
         assert cwd.is_dir(), "the reviewer starts in a clone that exists"
         self.calls.append((reviewer, argv, prompt, run_dir, timeout_s, cwd))
         (run_dir / review.RECORD).write_text("\n".join(self.records[reviewer]) + "\n", "utf-8")
@@ -1097,7 +1101,7 @@ def test_a_dry_run_prints_the_commands_and_launches_nothing(
     assert hub.posted == []
     assert hub.clones == {}
     out = capsys.readouterr().out
-    assert "claude -p --agent plan-reviewer --model sonnet --effort medium" in out
+    assert "claude -p --tools Read,Grep,Glob,Bash --model sonnet --effort medium" in out
     assert "claude -p '/code-review high --comment 10' --model opus --effort high" in out
 
 

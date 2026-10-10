@@ -39,7 +39,7 @@ dev = [
 
 [tool.ruff]
 line-length = 100
-src = ["src", "tests", "scripts"]
+src = ["src", "tests", "scripts", ".claude/skills/implementer/scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
@@ -53,13 +53,13 @@ exclude = ["*.md"]
 # lets the tests import them; setting it replaces the default (`src`), so `src` is listed too.
 [tool.basedpyright]
 include = ["src", "tests", "scripts", "kit.py"]
-extraPaths = ["src", "scripts", "."]
+extraPaths = ["src", "scripts", ".", ".claude/skills/implementer/scripts"]
 typeCheckingMode = "strict"
 pythonVersion = "3.13" # knob: python
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["scripts", "."] # the gate scripts, and kit.py at the root
+pythonpath = ["scripts", ".", ".claude/skills/implementer/scripts"] # the gate scripts, and kit.py at the root
 addopts = "--strict-markers"
 asyncio_mode = "auto"
 markers = [

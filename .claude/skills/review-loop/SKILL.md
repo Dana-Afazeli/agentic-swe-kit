@@ -7,8 +7,9 @@ argument-hint: "<pr> [--code MODEL/EFFORT] [--plan MODEL/EFFORT] [--rounds N]"
 # Review loop
 
 A reviewer's finding is a hypothesis: it earns a change only after you have reproduced it. The loop
-ends when both reviewers are green, when the rounds are used, or when what is left needs the maintainer.
-Follow `AGENTS.md` throughout.
+ends when both reviewers are green, when the rounds are used, or when what is left needs the
+maintainer. This is the last step of the `implementer` skill: its rules I-13 to I-17 stand here,
+each at the step it belongs to, and that skill's `references/rules.md` lists them.
 
 ## 1. Run the reviewers: one command
 
@@ -27,9 +28,10 @@ Before the call: the work is committed and pushed, and `make check` is green. On
 the command refuses to start with a head that is not pushed or a tree that is not clean, because
 the review would not see that work.
 
-The model and effort of each reviewer come from the brief's "Sessions:" line, or from what the maintainer
-said; pass them exactly. There is no default: the command refuses to start a reviewer whose model
-and effort were not named. If neither the brief nor the maintainer named them, ask the maintainer; do not pick.
+The model and effort of each reviewer come from the brief's "Sessions:" line, or from what the
+maintainer said; pass them exactly. There is no default: the command refuses to start a reviewer
+whose model and effort were not named. If neither the brief nor the maintainer named them, ask;
+do not pick.
 
 | Option | What it sets |
 |---|---|
@@ -40,8 +42,8 @@ and effort were not named. If neither the brief nor the maintainer named them, a
 | `--expire REVIEWER` | that reviewer's green no longer counts, because the commits since changed what it reviewed (your judgment; see `GREEN` below) |
 
 Models: `sonnet`, `opus`, `fable`, or a full model name. Efforts: `low`, `medium`, `high`, `xhigh`,
-`max`. Before the first call, tell the maintainer in one line what will run: the reviewers, the model and
-effort of each, the number of rounds.
+`max`. Before the first call, tell the maintainer in one line what will run: the reviewers, the
+model and effort of each, the number of rounds.
 
 The command works out the rest: which reviewers still have to run (not green, rounds left), the
 round number, the brief (`docs/briefs/NNN-*.md`, from the branch name), what each reviewer is told,
@@ -50,13 +52,13 @@ command with the same options in every round.
 
 Do not start the reviewers any other way. Through the Skill tool, `/code-review` answers on the
 project's pinned subagent model whatever you ask for, and a hand-briefed agent is not the code
-review (`docs/kit/research/2026-10-05-review-model-and-effort.md`).
+review.
 
 ### Reading what it prints
 
 ```
 code-review · round 1 · FINDINGS 3
-  asked opus/xhigh · answered claude-opus-5-5 x41 · $1.84 · 412 s · advisor calls 0 · denied tool calls 0
+  asked opus/xhigh · answered claude-opus-5-5 x41 · $N.NN · 412 s · advisor calls 0 · denied tool calls 0
   inline comments added: 3
   record: <link to the record comment on the PR>
   report: <path>/code-round-1/report.md
@@ -80,6 +82,13 @@ next: validate each finding by reproducing it, ...
 - `FAILED`: the `problem:` line says why: the time limit, the spending cap, the process died, or
   the reviewer left the PR's head in its clone. A failed run uses a round. Do what the `next:` line
   says.
+- **A run that the network ended does not count.** When a run reviewed nothing because the
+  network or the API could not be reached (its report is a connection error, under `NO VERDICT`
+  or `FAILED`), that is no round of the review: the maintainer asked for a number of reviews,
+  not of attempts. The launcher cannot tell the two apart and counts the run once its record is
+  on the PR. Post the record as the launcher says, so that the run can be seen, and give that
+  reviewer its round back when it would otherwise be out of rounds: one more call with
+  `--only <reviewer> --rounds <N+1>`. Say in the review record which run was lost.
 - `warning:` the reviewer left changes in its clone. Nothing is harmed, the clone is gone; the
   record comment says it too. Mention it in the report to the maintainer.
 - `answered` is read from the run's record, not from what was asked. Quote that line when you
@@ -94,22 +103,31 @@ Reach your own verdict from evidence before you compare it with the reviewer's, 
 from severity: a finding can be true and low-impact. Do not agree to be agreeable and do not reject
 by reflex.
 
-1. **Reproduce** with a probe in your scratchpad, bounded by `signal.alarm(60)`, at two or three
-   input sizes so that a slow case shows its growth instead of hanging (macOS has no `timeout`).
+1. **I-15** Reproduce the finding before anything changes: a probe in your scratchpad, bounded by
+   `signal.alarm(60)`, at two or three input sizes so that a slow case shows its growth instead
+   of hanging (macOS has no `timeout`).
 2. Decide one of:
    - **fix**: true, and inside the brief's scope;
    - **reject with evidence**: say what you ran and what it showed;
    - **park**: true, out of scope: one line in `docs/BACKLOG.md`;
-   - **The maintainer's decision**: a rule would have to change: put it under "Next steps for the
-     maintainer" with the options and your recommendation.
+   - **the maintainer's decision**: a rule would have to change: put it on the page under
+     "Decisions for the maintainer", standing alone, with the options and your recommendation.
 3. If a finding is partly right, fix that part and say which part you did not take.
 
 ## 3. Fix with TDD, and check what the fix costs elsewhere
 
+**I-14** Fix the kind, not the case. A finding is one way a condition can come about; before you
+fix it, ask what the others are. At the second finding of one kind (the same area, the same sort
+of gap), stop patching: write the invariant down in one sentence, and a test for each way it can
+break, then fix against those. A third round on the same kind goes to the maintainer as a
+decision, with the invariant and what is still open, instead of a third patch. A fix that covers
+the reported case and not its kind opens the next gap, round after round.
+
 1. Write the failing test first and save its output: that is the red proof. Prefer a test that
    counts work to one that reads a clock, so the gate answers the same everywhere.
-2. Write the smallest fix. `make check`; and `make mutate MUTANTS="<module>.*"` when you touched
-   `src/kitpkg/core/`. A surviving mutant means restructure the code, never an escape comment.
+2. Write the smallest fix. `make check`; and `make mutate MUTANTS="<package>.<module>.*"` when
+   you touched a module the mutation gate covers. A surviving mutant means restructure the code,
+   never an escape comment.
 3. Measure the neighbours: a fix that removes one cliff can slow the common case. Run the committed
    code and the fixed code on several input shapes and compare their output on random inputs.
 4. Never remove, skip or weaken a test, never add an escape-hatch comment. A gate file changes only
@@ -117,23 +135,27 @@ by reflex.
 
 ## 4. Answer on the PR, then run the command again
 
-1. Read every comment on the PR first, top-level ones too (`references/commands.md`). Do this
-   before each push and before `gh pr ready`, not once.
+1. **I-13** Read every comment on the PR first, top-level ones too (`references/commands.md`). Do
+   this before each push and before `gh pr ready`, not once: a comment from the maintainer or the
+   planning session can land a minute before your push.
 2. Reply in each inline thread with the evidence: what you reproduced, the fix (commit, test), what
    you measured, what you did not take and why. Post from a file (`-F body=@file`).
 3. Findings that have no inline thread (plan-reviewer's, and any the summary lists as not posted
    inline): answer them in one top-level comment, by number. The next round reads it.
-4. One commit and one push per round. Read `gh pr checks <pr>` once: a red check is yours to fix
-   before the next round; do not wait in a loop for pending ones.
-5. **Resolve each thread that is genuinely fixed, and only those.** This is your judgment, thread
-   by thread; no tool does it for you. A thread is genuinely fixed when you have seen the fix
-   work at the pushed head: the test that was red is green, or the probe that showed the defect
-   now gives the right answer, and the whole finding is covered, not a part of it. Then resolve
-   it (`references/commands.md`).
-6. **Every other thread stays open: an open thread is how this loop escalates to the maintainer.** Parked,
-   rejected, kept as it is, fixed in part, a decision to take, a fix you could not see working:
-   leave it open, and make sure your last answer in it says what is still open and what the maintainer has
-   to decide or know. Never resolve a thread to make the PR look finished.
+4. One commit and one push per round. After a push that changes the diff, set the page and post
+   the proofs again (`references/commands.md`): the reviewers read both in every round. Read
+   `gh pr checks <pr>` once: a red check is yours to fix before the next round; do not wait in
+   a loop for pending ones.
+5. **I-16** Resolve each thread that is genuinely fixed, and only those. This is your judgment,
+   thread by thread; no tool does it for you. A thread is genuinely fixed when you have seen the
+   fix work at the pushed head: the test that was red is green, or the probe that showed the
+   defect now gives the right answer, and the whole finding is covered, not a part of it. Then
+   resolve it (`references/commands.md`).
+6. **Every other thread stays open: an open thread is how this loop escalates to the
+   maintainer.** Parked, rejected, kept as it is, fixed in part, a decision to take, a fix you
+   could not see working: leave it open, and make sure your last answer in it says what is still
+   open and what the maintainer has to decide or know. Never resolve a thread to make the PR
+   look finished.
 7. Run the same command again. It starts only the reviewers that are not green, and it says so
    when a reviewer has used its rounds. The next reviewer reads resolved threads too and raises
    again what does not hold.
@@ -145,24 +167,26 @@ Reached when the `next:` line says every reviewer is green, or says to stop.
 1. Go through the threads once more (step 4, items 5 and 6): the last round's fixes too are
    resolved where you saw them work, and nothing else is. Say in the report that no reviewer has
    checked the last round's fixes.
-2. Rebuild the PR body from saved proof files (verbatim, every cut marked `[…]`). In the
-   walkthrough, give one line per reviewer run, copied from its record comment: round, asked,
-   answered, verdict, cost, time. Update "Next steps for the maintainer" and "Docs this change made stale".
+2. Set the page and post the proofs once more (`references/commands.md`). Under "The review
+   record", give one line per reviewer run, copied from its record comment: round, asked,
+   answered, verdict, cost, time. Bring "Next steps for the maintainer", "Decisions for the
+   maintainer" and "Docs made stale, and fixed" up to date.
 3. Append `docs/FRICTION.md` lines for what went wrong, was slow or confused. Take figures from
    saved files, not from memory.
-4. **Post the closing comment on the PR**, the last thing on it and the one the maintainer reads at the
-   end (`gh api repos/<o>/<r>/issues/<n>/comments -F body=@closing.md`). Head it
+4. **I-17** Post the closing comment on the PR, the last thing on it and the one the maintainer
+   reads at the end (`gh api repos/<o>/<r>/issues/<n>/comments -F body=@closing.md`). Head it
    `**Review loop closed**` when every reviewer is green, `**Review loop stopped**` when the
    rounds are used. Its body, in this order:
-   - **Next steps for the maintainer**, the same checklist as in the PR body: every action only the maintainer can
-     take, every thread still open as an item of its own (its link, and what the maintainer has to decide
-     or know), and the merge last;
+   - **Next steps for the maintainer**, the same checklist as on the page: every action only the
+     maintainer can take, every thread still open as an item of its own (its link, and what the
+     maintainer has to decide or know), and the merge last;
    - one line per reviewer: its last verdict, the rounds it used, the model and effort that ran
      (copied from the record comments);
    - threads: how many resolved, how many open;
    - what no reviewer has checked (the last round's fixes), and what was not run.
-   Post it from a file, after the PR body is rebuilt, so the two say the same thing.
-5. Report to the maintainer in chat in the same order, shorter, with the link to the closing comment.
+   Post it from a file, after the page is set, so the two say the same thing.
+5. Report to the maintainer in chat in the same order, shorter, with the link to the closing
+   comment.
 
 ## Requests and controls
 
@@ -196,8 +220,8 @@ Say which is which when you report; do not present a request as a control.
 - The project's hooks run in a reviewer process too. The Stop hook stands aside there (the launcher
   marks the process with `KIT_REVIEWER_CLONE=1`): a reviewer changes nothing, and a red gate on the
   PR under review is the author's to pass. Before that marker existed, both reviewers of the kit's
-  PR 1 ran to their time limits on the branch's own red (a renamed test awaiting the label, which
-  the hook checked until ADR-0008) with their reports written and unposted.
+  first pull request ran to their time limits on the branch's own red with their reports written
+  and unposted.
 - On a PR that has no brief, plan-reviewer cannot run: use `--only code` in every round. The
   `next:` line then closes the loop on the code review alone and says that plan-reviewer had no
   brief. With a brief, `--only` never closes the loop: the line asks for the reviewer left out.

@@ -11,10 +11,16 @@ shaped this way is in `PHILOSOPHY.md`; what each gate does is in `HARNESS.md`.
 | Actor | Who | Does |
 |---|---|---|
 | **The maintainer** | the human | Frames units, reads briefs and PRs, adds labels, merges, keeps the friction log honest |
-| **Planning session** | a Claude Code session in the development checkout (any model) | Explores read-only, interviews the maintainer, writes the next brief and the decision records |
-| **Implementer** | a *fresh* Claude Code session, started with "Execute `docs/briefs/NNN-slug.md`" | Red → green → refactor; opens the PR; runs the review loop; answers the reviews |
-| **Reviewers** | two headless Claude Code processes the implementer starts with `scripts/review.py`: `plan-reviewer` and `/code-review`, each on a named model and effort, each in a throwaway clone of the PR's head | Report gaps between brief and diff, and correctness bugs; findings and a record of each run land on the PR |
+| **Planning session** | a Claude Code session in the development checkout (any model) | Runs `/brief-writer`: orients, interviews the maintainer, writes the next brief and the decision records |
+| **Implementer** | a *fresh* Claude Code session, started with `/implementer NNN` | Red → green → refactor; sets the page and the proofs comment; runs the review loop; answers the reviews |
+| **Reviewers** | two headless Claude Code processes the implementer starts with `scripts/review.py`: the conformance reviewer (`/reviewer conformance`, started with named tools and no agent file) and `/code-review`, each on a named model and effort, each in a throwaway clone of the PR's head | Report gaps between brief and diff, and correctness bugs; findings and a record of each run land on the PR |
 | **CI** | GitHub Actions on PRs to the base branch | The same `make check`, plus diff coverage, mutation on changed core modules, secret scan, gate-guard, integrity, prove |
+
+Each role is a skill under `.claude/skills/` — the whole procedure of its work, with numbered rules
+(`B-` brief writer, `I-` implementer, `P-` conformance review, `C-` code review) that
+`scripts/roles.py` keeps in step with each skill's rule table. `AGENTS.md` keeps only what every
+role needs and opens by sending a session to its skill; a rule that lives in a skill is invisible to
+a session that has not run it.
 
 **Checkouts.** Separate clones, never git worktrees: worktrees share `.git/hooks` and Claude Code's
 local settings with the main checkout, and both bit us. A *development checkout* is where briefs are
@@ -31,7 +37,7 @@ afterwards). Never run `git switch` or `git checkout` in a folder another sessio
 **Models.** Sonnet at medium by default; Opus at high for a single hardest-judgment agent; the
 largest models only as reviewers of hard or high-stakes work, stingily; Haiku only for mechanical
 steps. Every spawn names `model` and `effort`. `.claude/settings.json` pins built-in subagents to
-Sonnet; `.claude/agents/*.md` files set their own. The brief names the implementer's and the
+Sonnet; the review launcher passes each reviewer's. The brief names the implementer's and the
 reviewers' model and effort.
 
 ## 2. Inner loop — per unit of work
@@ -39,33 +45,37 @@ reviewers' model and effort.
 1. **Frame** (maintainer + planning session): pick the next slice from `docs/ROADMAP.md`. If the diff
    cannot be described in two sentences, split it. Skip the rest for typo-class changes.
 2. **Explore** read-only (plan mode, or an Explore subagent on Sonnet). Scope it, or it eats the budget.
-3. **Brief** (the planning session interviews the maintainer → `docs/briefs/NNN-slug.md`, one screen,
-   from the template, pushed as a **draft PR** on branch `<prefix>-NNN-slug`) — **human gate 1: the
+3. **Brief** (`/brief-writer`: the planning session interviews the maintainer → `docs/briefs/NNN-slug.md`,
+   one screen, from the skill's `assets/brief.md`, pushed as a **draft PR** on branch `<prefix>-NNN-slug`) — **human gate 1: the
    maintainer reads the brief in the PR and adds `brief-approved`.** Comments on the draft are the
    interview's last round.
-4. **Implement** (fresh session on the same branch): for each behaviour, failing test first → run it
-   and show the failure → code → green → refactor. The Stop hook enforces `make check`; run
+4. **Implement** (`/implementer NNN`, a fresh session on the same branch): for each behaviour, failing
+   test first → run it and show the failure → code → green → refactor. The Stop hook enforces `make check`; run
    `scripts/integrity.py --base origin/<base>` yourself before marking the PR ready (CI holds the
    merge for a vanished test; the hook does not hold the session — ADR-0008). Read the PR's
-   comments — top-level ones too — before each push and before marking it ready.
+   comments — top-level ones too — before each push and before marking it ready. The description is
+   **the page** (`pr.py page`): at most 80 lines for the maintainer — what this is, the maintainer's
+   steps, the decisions, what is not proven — then the reference parts the reviewers check; the proofs
+   are one PR comment (`pr.py proofs`), verbatim from saved files.
 5. **Review** (fresh context): the implementer runs the `review-loop` skill. One command,
    `uv run python scripts/review.py <pr> --plan MODEL/EFFORT --code MODEL/EFFORT`, starts
-   `plan-reviewer` (conformance) and `/code-review <effort> --comment` (correctness) as processes of
+   the conformance reviewer (`/reviewer conformance`) and `/code-review <effort> --comment` as processes of
    their own, in clones of the PR's head. Findings and a record of each run land as PR comments. The
    implementer reproduces each finding before changing anything, fixes with a failing test first,
    answers on the PR, resolves only the threads whose fix it saw work, decides whether a reviewer's
    green still stands after the commits since (`--expire`), and runs the command again — for as many
    rounds as the brief or the maintainer says (default 3). It ends with a closing comment: the
    maintainer's next steps, one line per reviewer, thread counts, what nobody checked.
-6. **PR** → CI → **human gate 2: the maintainer reads the diff and the walkthrough, merges (squash).**
+6. **PR** → CI → **human gate 2: the maintainer reads the page and the diff, merges (squash).**
    Every PR that touches a gate file needs `gates-approved` first; one that weakened a check needs
-   `checks-weakened-approved`.
+   `checks-weakened-approved`; work beyond the brief that the maintainer said yes to is listed on the
+   page with the maintainer's words and carries `scope-approved`.
 7. **Compound**: anything corrected twice becomes a hook, test, rule or skill *now*; append the
    friction line; tick the unit in the roadmap.
 
 ## 3. Briefs
 
-- Numbered `NNN` in execution order; `docs/briefs/000-TEMPLATE.md` is the format. One screen.
+- Numbered `NNN` in execution order; the brief-writer skill's `assets/brief.md` is the format. One screen.
   Self-contained: the implementer sees the brief and the repository, never the planning conversation.
 - **The brief is a PR.** The planning session creates the unit's branch `<prefix>-NNN-slug`, commits
   only `docs/briefs/NNN-slug.md`, pushes, and opens a draft PR titled after the brief. The maintainer
@@ -100,7 +110,7 @@ reviewers' model and effort.
 
 Every file under `docs/` opens with a status line, and the status is the contract:
 - `Status: living` — kept true; whoever makes a statement in it false fixes it **in the same PR**
-  (the PR template asks "which docs did this change make stale?"; `plan-reviewer` checks).
+  (the page asks under "Docs made stale, and fixed"; the conformance reviewer checks, P-04).
 - `Status: snapshot (date)` — never edited; a record. Corrections go in a new file.
 - `Status: superseded by <file>` or `Status: deprecated (date) — see <file>` — the old file stays
   one cycle with the pointer at the top, so a model that reaches it is redirected, not misled; the

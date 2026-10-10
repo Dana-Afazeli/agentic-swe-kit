@@ -135,10 +135,11 @@ in the development checkout only.
 
 ## 8. Claude Code harness
 
-**`AGENTS.md`** — root, ≤ 100 lines, loaded at session start (Claude Code ≥ 2.1.277 reads it
+**`AGENTS.md`** — root, ≤ 85 lines, loaded at session start (Claude Code ≥ 2.1.277 reads it
 natively, but only when no `CLAUDE.md` exists in the directory or any parent — so never create one).
-Order: the gate · the TDD protocol · architecture · work protocol · where things live · facts and
-state · models and cost · habits · project rules. Everything above "Project rules" is kit-owned.
+It holds what every role needs; what one role needs lives in that role's skill. Order: roles · the
+gate · architecture · git, labels and gate files · writing for the maintainer · where things live ·
+facts and state · models and cost · project rules. Everything above "Project rules" is kit-owned.
 
 **`.claude/settings.json`** (committed; the dev-session allowlist belongs in the repo, versioned and
 reviewed; `.claude/settings.local.json` stays gitignored for machine-only tweaks):
@@ -175,32 +176,46 @@ reviewed; `.claude/settings.local.json` stays gitignored for machine-only tweaks
     on the PR under review is the author's to pass. An implementer
     cannot set that variable for its hooks: they run with Claude Code's environment, and the settings
     file that could change it is a gate file.
-- Claude Code picks up hook edits while a session runs (file watcher); agent definitions
-  (`.claude/agents/*.md`) load at session start. A hook that cannot start does not block: check
-  `/hooks` after a change.
+- Claude Code picks up hook edits while a session runs (file watcher); a skill folder written
+  during a session shows up in that session's skill list within the turn. A hook that cannot start
+  does not block: check `/hooks` after a change.
 
-**`.claude/agents/plan-reviewer.md`** (`model: sonnet`, `effort: medium`, read-only tools): input =
-brief path + PR number. Reports only: a criterion with no test that would fail without the change; a
-change outside the brief's scope; a walkthrough the diff contradicts; a `Status: living` document the
-diff made stale. Constrained on purpose — an unconstrained reviewer invents work.
+**`.claude/skills/`** — the roles, each a skill: the whole procedure of its work in `SKILL.md`, its
+templates in `assets/`, its examples and its rule table in `references/`, its scripts in `scripts/`.
+`brief-writer` (`/brief-writer`): orient, interview the maintainer, cut the work, check what the
+brief rests on, write it from `assets/brief.md`, open the draft PR. `implementer` (`/implementer
+NNN`): the PR carries `brief-approved`, build test-first, notice what is out of scope, show the work
+as the page and the proofs comment (`scripts/pr.py`), hand over to `review-loop`. `reviewer`: what
+both reviews share; `references/conformance.md` for the conformance review,
+`references/correctness.md` appended to the bundled `/code-review`. An instruction someone could
+check starts with an id (`B-`, `I-`, `P-`, `C-`); `uv run python scripts/roles.py` lists the 44
+rules and fails when a skill's text and its `references/rules.md` disagree. The skills name no
+person and no project — they say `the maintainer` and `the base branch` — and `kit.py` renders
+nothing under `.claude/skills/`: `AGENTS.md`'s Roles section says who and which.
 
 **`.claude/skills/review-loop/`** + **`scripts/review.py`**: one command starts each reviewer as a
 `claude -p` process with `--model`, `--effort`, a spending cap, a time limit, no advisor, no MCP
 servers, in a clone of the PR's head whose `origin` has no push address and whose pre-push hook
-refuses every push. The record of each run is a PR comment; records are the memory between rounds.
-`--expire <reviewer>` says that a green no longer counts. No default model or effort.
+refuses every push. The conformance reviewer has no agent file: the launcher starts it with
+`--tools Read,Grep,Glob,Bash` and a prompt that begins `/reviewer conformance` (a file under
+`.claude/agents/` would let any session spawn it past the launcher's caps). The record of each run
+is a PR comment; records are the memory between rounds. `--expire <reviewer>` says that a green no
+longer counts. No default model or effort.
 
-**`.github/pull_request_template.md`**: brief link · **Next steps for the maintainer** (every action
-only the maintainer can take, in order, as checkboxes) · **Walkthrough for the maintainer** (≤ 15
-lines) · TDD evidence (red output; `make check` green — verbatim, collapsed, trimmed lines marked
-`[…]`) · the proofs the brief names · out of scope, noticed · docs made stale and fixed · gate files
-changed (`gates-approved`) · checks weakened (`checks-weakened-approved`).
+**The page** (`.claude/skills/implementer/assets/pr-page.md`, set by `pr.py page`): the PR
+description is at most 80 lines the maintainer reads — what this is and where it sits · **Next steps
+for the maintainer** (each with what it unblocks) · **Decisions for the maintainer** (each standing
+alone) · **Not proven** — then the line `Reference: below this line, checked by the reviewers` and
+the reference parts (file by file · where this differs from the brief · the review record · out of
+scope · docs made stale · gate files changed · checks weakened). Proofs go in one PR comment
+(`pr.py proofs`), verbatim from saved files, cuts marked `[…]`. The script refuses what is not the
+page; the conformance reviewer judges whether it reads cold (P-06) and whether the proofs hold (P-05).
 
 ## 9. File ownership — what a kit update touches
 
 | Owner | Files | On `kit.py update` | How a project extends it |
 |---|---|---|---|
-| **kit-owned** | `kit.py` · `Makefile` · `.claude/**` · `.github/workflows/ci.yml` · `.github/pull_request_template.md` · `.pre-commit-config.yaml` · `scripts/**` · `tests/harness/**` · `tests/prove/**` · `AGENTS.md` · `.gitignore` · `.python-version` · `docs/kit/**` · `docs/briefs/000-TEMPLATE.md` · `docs/decisions/0000-TEMPLATE.md` | three-way merge: base = the old kit rendered with your answers, ours = your file, theirs = the new kit rendered; conflicts stay as markers and are listed | add, don't edit: `project.mk`, `.github/workflows/project.yml`, `docs/DELTAS.md`, the "Project rules" section of `AGENTS.md`; added permission rules merge |
+| **kit-owned** | `kit.py` · `Makefile` · `.claude/**` · `.github/workflows/ci.yml` · `.pre-commit-config.yaml` · `scripts/**` · `tests/harness/**` · `tests/prove/**` · `AGENTS.md` · `.gitignore` · `.python-version` · `docs/kit/**` · `docs/decisions/0000-TEMPLATE.md` | three-way merge: base = the old kit rendered with your answers, ours = your file, theirs = the new kit rendered; conflicts stay as markers and are listed | add, don't edit: `project.mk`, `.github/workflows/project.yml`, `docs/DELTAS.md`, the "Project rules" section of `AGENTS.md`; added permission rules merge |
 | **mixed** | `pyproject.toml` (your dependencies, the kit's tool configuration) | three-way merge; the kit edits `[tool.*]`, you edit `[project]` and the dependency groups | edit freely; a collision is visible |
 | **project-owned** | `README.md` · `project.mk` · `src/<pkg>/**` · `tests/conftest.py` · `tests/test_*.py` · `docs/DELTAS.md` · `docs/ROADMAP.md` · `docs/FRICTION.md` · `docs/BACKLOG.md` · `docs/decisions/NNNN-*.md` · `docs/research/**` · `uv.lock` · `kit.lock` | never touched (`kit.lock` is rewritten; `uv.lock` is re-locked) | yours |
 | **kit-only** | the kit's `README.md`, `CHANGELOG.md`, `LICENSE` (copied to `docs/kit/LICENSE`), the kit's own decisions, briefs, friction log, backlog, roadmap, `docs/templates/**` | removed by `init`; never present in a project | — |
@@ -217,9 +232,9 @@ the update when it differs from the project's — and `kit.py` itself is merged 
 | Knob | Kit value | Flag | Where |
 |---|---|---|---|
 | package | `kitpkg` | `--package` | `src/<pkg>/`; `pyproject.toml` (`name`, hatch path, coverage source, contract modules, mutmut paths); `ci.yml` mutation path; `review.py` work dir; `project.mk`; tests |
-| base branch | main (the kit's default) | `--base` | the `# knob: base` lines of `stop_gate.py`, `guard_bash.py` and `ci.yml`; `settings.json` rules; `AGENTS.md`, the skill texts and the documents (`` `main` ``, `origin/main`, `HEAD:main`) — in a `.py` file only the knob line changes |
-| branch prefix | = base | `--branch-prefix` | the `# knob: prefix` line of `review.py`; `settings.json` rules; `AGENTS.md`, the brief template and the documents (`main-NNN-`, `main-:*`) — in a `.py` file only the knob line changes |
-| maintainer | `the maintainer` | `--maintainer` | `AGENTS.md`, the PR template, the skill texts, the documents — never a `.py` file: hook messages keep the role phrase, so a rename cannot change how code is formatted |
+| base branch | main (the kit's default) | `--base` | the `# knob: base` lines of `stop_gate.py`, `guard_bash.py` and `ci.yml`; `settings.json` rules; `AGENTS.md` and the documents (`` `main` ``, `origin/main`, `HEAD:main`); the skills say `<base>` and are not rendered — in a `.py` file only the knob line changes |
+| branch prefix | = base | `--branch-prefix` | the `# knob: prefix` line of `review.py`; `settings.json` rules; `AGENTS.md` (the Roles line) and the documents (`main-NNN-`, `main-:*`) — in a `.py` file only the knob line changes |
+| maintainer | `the maintainer` | `--maintainer` | `AGENTS.md` and the documents — never a `.py` file (hook messages keep the role phrase, so a rename cannot change how code is formatted), never a skill (skills say `the maintainer`; in backticks the phrase is the term, not the person, and stays — `AGENTS.md`'s Roles line says who) |
 | python | `3.13.12` | `--python` | `.python-version`, `requires-python`, basedpyright `pythonVersion` |
 
 Each site in a Python, YAML or TOML file carries a `# knob: <name>` comment; JSON rules are rewritten

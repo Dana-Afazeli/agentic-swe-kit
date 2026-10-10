@@ -14,7 +14,7 @@ uv run python scripts/review.py <n> --plan sonnet/medium --code opus/xhigh --rou
 uv run python scripts/review.py <n> --plan sonnet/medium --code opus/xhigh --dry-run       # print the commands, start nothing
 ```
 The model and effort of a reviewer that runs must be named; there is no default (the values in
-the examples are the ones PR #11 ran with). Other options: `--brief PATH`, `--budget-usd X`,
+the examples only show the form). Other options: `--brief PATH`, `--budget-usd X`,
 `--timeout-min N` (the last two apply to each reviewer the call starts). Caps when not named:
 code $10 and 20 minutes; plan $2 and 8 minutes.
 The Bash tool stops a background command after 30 minutes unless told otherwise: with a longer
@@ -69,15 +69,21 @@ refuses an address it has to read through a shell variable, as in `for id in …
 - Save each proof as `cmd > f 2>&1; echo "exit code: $?" >> f`.
 - Compare committed and fixed code: `git show HEAD:<path> > <scratch>/old.py`, load it with
   `importlib.util.spec_from_file_location`, and run both on the same inputs.
-- `make check`; then `make mutate MUTANTS="kitpkg.core.<module>.*"` when `src/kitpkg/core/`
-  changed; `uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=95 --branch-coverage`
-  after `git add` (diff-cover does not see untracked files).
+- `make check`; then `make mutate MUTANTS="<package>.<module>.*"` when a module the mutation gate
+  covers changed; `uv run diff-cover coverage.xml --compare-branch=origin/<base> --fail-under=95
+  --branch-coverage` after `git add` (diff-cover does not see untracked files; `<base>` is the
+  base branch).
 - CI after a push: `gh pr checks <n>`, read once.
 
-## The PR body
-Build it with a script that reads the saved proof files, so that nothing is retyped: a collapsed
-`<details>` per proof, a four-backtick fence, `[…]` wherever lines are cut. Keep every heading of
-`.github/pull_request_template.md`. `gh pr edit <n> --body-file <file>`.
+## The page and the proofs comment
+After each push that changes the diff, with the implementer skill's script (`P` is the folder of
+saved proof files, `page.md` the filled-in `.claude/skills/implementer/assets/pr-page.md`):
+```
+uv run python .claude/skills/implementer/scripts/pr.py proofs <n> "$P"    # one comment, a block per file, word for word
+uv run python .claude/skills/implementer/scripts/pr.py page <n> page.md   # the description; refuses what is not the page
+```
+The proofs comment names the head it belongs to, so push first. Cut a long proof yourself and
+mark every cut with `[…]`; the script never cuts.
 
 ## The closing comment (SKILL.md, step 5)
 The last comment on the PR, the one the maintainer reads at the end. Write it to a file, then:
@@ -85,5 +91,5 @@ The last comment on the PR, the one the maintainer reads at the end. Write it to
 gh api repos/<o>/<r>/issues/<n>/comments -F body=@closing.md
 ```
 Its first line is `**Review loop closed**` or `**Review loop stopped**`; then "Next steps for
-the maintainer" as in the PR body, one line per reviewer (last verdict, rounds used, model and
+the maintainer" as on the page, one line per reviewer (last verdict, rounds used, model and
 effort that ran), the thread counts, and what no reviewer has checked.
