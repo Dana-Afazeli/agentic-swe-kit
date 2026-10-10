@@ -27,8 +27,9 @@ at `9458f4f` with `git grep`; the first command under "Proofs" shows the same in
 The rule, decided by the maintainer on 2026-10-10: **a project receives the structure and empty
 places for its own records, and nothing about how the kit came to be.** The maintainer's two
 answers: the research notes — `move` (to `docs/research/`, kit-only there); a pointer to a record
-in a shipped file — "just state the decision without explanation or pointers". This unit runs
-before `make prove`, which becomes brief 006.
+in a shipped file — "just state the decision without explanation or pointers". After this
+unit the roadmap's next units are the adopter skill (brief 006), `make prove` (brief 007) and the
+rehearsal (brief 008).
 
 ## Objective
 A project rendered by `kit.py` holds none of the kit's records, no pointer to one, no record id and
@@ -45,7 +46,7 @@ kit-only test that renders a project keeps it so.
 - `PHILOSOPHY.md` keeps its reasoning. Only a sentence that tells an event (a date, an incident, a
   count of review rounds) is restated as the fact it taught; nothing else is shortened or moved.
 - The shipped documents name a `make prove` target and a CI job `prove` that do not exist yet
-  (brief 006 builds them): one `docs/BACKLOG.md` line, no edit.
+  (brief 007 builds them): one `docs/BACKLOG.md` line, no edit.
 - Installing the kit into an existing repository, other language stacks, a release tag.
 
 ## Inputs
@@ -160,7 +161,8 @@ project's fix to a kit-owned file goes to the kit as a pull request), which is f
 stays in SETUP §4; `HARNESS.md` §9, `README.md` lines 83 and 93, and `CHANGELOG.md` ("Unreleased":
 the notes moved and left the projects, the two places, what `update` does with the notes in a
 project that has them) say what is true; `docs/ROADMAP.md` gains this unit as 2c, ticks units 1 to
-2b as merged (pull requests 1 to 4, 2026-10-10), and numbers `make prove` 006 and the rehearsal 007.
+2b as merged (pull requests 1 to 4, 2026-10-10), and numbers `make prove` 007 and the rehearsal 008
+(brief 006, the adopter skill, adds its own unit).
 
 A criterion a trivial test could satisfy is not a criterion. Existing tests may not be removed,
 skipped or weakened, and no escape-hatch comment added: CI job `integrity` lists it; if a test is
