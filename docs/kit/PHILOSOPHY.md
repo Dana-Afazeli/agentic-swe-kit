@@ -51,8 +51,8 @@ counts it as a finding only without the list or the label.
 Why not more gates? Each one costs the maintainer's attention, which is the scarcest resource in a
 one-person project; and every gate the agent can satisfy by itself is not a gate. Why not fewer? Because
 no verifier has yet earned the trust to merge unread. The report's rule is to add risk zoning
-(green changes merge on green CI) only once the verifiers have a track record — the kit has a
-backlog item for it and nothing else.
+(green changes merge on green CI) only once the verifiers have a track record; the kit has none
+until then.
 
 ## 4. Enforce, don't advise — and the agent never polices its own gates
 
@@ -71,23 +71,23 @@ push that lands on the base branch, a change of labels. It is read in one pass t
 reads it, and it is still not a wall: `find -delete`, a script that calls `gh`, a variable that
 expands to a command's name all get through. The texts say so, by name. A text that calls a net a
 wall is broken by the next review round in a sandbox. The rule: before writing "cannot", try one
-spelling that does not go through the mechanism the claim rests on. **CI and the maintainer's read are the wall**; the guard exists to stop the habit early and to
-make the agent say so when it is refused.
+spelling that does not go through the mechanism the claim rests on. **CI and the maintainer's read
+are the wall**; the guard exists to stop the habit early and to make the agent say so when it is
+refused.
 
 **The hook fails closed.** A hook that raises an exception exits with code 1, and Claude Code treats
 1 as "not a block". Both hooks catch everything and exit 2. A gate that cannot read the labels it
 depends on blocks. A CI step whose `git diff` fails must stop the job, never read as "nothing
-changed" (`|| true` only on a filter, never on the command that gathers the input). Two steps of
-the first CI workflow failed open exactly this way, and a review caught them by running each step
-with a bad base.
+changed" (`|| true` only on a filter, never on the command that gathers the input). A step that
+fails open this way is found by running it with a bad base.
 
 ## 5. A gate nobody has watched fail is not a gate
 
-Every gate in the kit was first shown red on a planted defect, then green after the revert, with
-the output pasted in the PR. The habit found real holes: a secret scanner that ignores a bare AWS
-key ID (it needs the secret beside it); a mutation tool whose warm cache reported a stale survivor
-after a test-only fix; a strict-types proof that would also pass in non-strict mode; a CI job that
-aborted on its first real PR because the changed file had no function to mutate. `make prove` keeps
+Every gate in the kit is shown red on a planted defect, then green after the revert, with the
+output pasted in the PR. The habit finds real holes: a secret scanner that ignores a bare AWS key
+ID (it needs the secret beside it); a mutation tool whose warm cache reports a stale survivor after
+a test-only fix; a strict-types proof that also passes in non-strict mode; a CI job that aborts
+when the changed file has no function to mutate. `make prove` keeps
 the habit mechanical: it plants each defect in a throwaway clone and asserts its gate goes red, so
 a project can re-prove its gates on a new machine or after a kit update.
 
@@ -101,18 +101,18 @@ could write the tests; the **implementer** writes those tests first and shows th
 code; the **mutation gate** checks that the tests bite (a surviving mutant fails the PR); the
 **conformance reviewer**, a fresh process, maps each criterion to a test and flags tautologies.
 
-Agents are known to delete a failing test instead of fixing the code. The first design blocked the
-*edit* — a removed `def test_`, an added skip, a shrinking test file — and did not survive a closer
-look: every legitimate refactor of a test trips such a pattern, and a test left in place with its
-body gutted trips none. The kit checks the **outcome** instead: `scripts/integrity.py` compares the
+Agents are known to delete a failing test instead of fixing the code. Blocking the *edit* — a
+removed `def test_`, an added skip, a shrinking test file — does not hold: every legitimate
+refactor of a test trips such a pattern, and a test left in place with its body gutted trips none.
+The kit checks the **outcome** instead: `scripts/integrity.py` compares the
 test IDs the gate ran at the base with the ones it runs now, and lists vanished tests, new skips, and
 new escape-hatch comments (`# noqa`, `# type: ignore`, `# pragma: no cover`, `# pragma: no mutate`,
 …) — whatever tool made the change. The CI job runs it and is red until the maintainer labels
 `checks-weakened-approved`; the agent runs it itself before marking the PR ready. The Stop hook
 does not run the test half: it would hold every session on a branch that removed a test on
 purpose, the reviewers' too, until a label only the maintainer adds, and a hold the held party
-cannot lift is a stall, not a gate. The merge waits for the maintainer; the session does not. A legitimate rename costs one label and one sentence in the PR. The
-assertion-level case (a test kept, its assertion gutted) is what the mutation gate is for.
+cannot lift is a stall, not a gate. The merge waits for the maintainer; the session does not. A
+legitimate rename costs one label and one sentence in the PR. The assertion-level case (a test kept, its assertion gutted) is what the mutation gate is for.
 
 The escalation for high-stakes units — a separate session writes acceptance tests the implementer
 cannot edit — is described and not built; it is for a project whose friction log shows tests being
@@ -163,8 +163,8 @@ mechanism.
 
 Reviews are bounded by things the reviewer cannot ignore — a time limit, a spending cap, a clone
 with no push address — and by requests it is told about (stay read-only, bound every probe, about 25
-tool calls). The texts say which is which. One review ran 25 minutes and 150,000 tokens on a single
-cost probe before the caps existed.
+tool calls). The texts say which is which. Without the bounds a review can spend tens of minutes
+and six figures of tokens on a single cost probe.
 
 ## 9. Compounding, from real friction
 
@@ -182,8 +182,8 @@ becomes a hook, a test, a rule or a skill — or an explicit `wontfix`. The tabl
 | a mistake the agent must never make | a permission rule or a hook, not prose |
 
 The report's warning is that most of the tooling built in 2025 was abandoned, because it was built
-against anticipated friction. The kit's backlog is long and its rule is strict: nothing moves from
-the backlog to the harness until the friction log shows it twice.
+against anticipated friction. The rule is strict: nothing moves from the backlog to the harness
+until the friction log shows it twice.
 
 ## 10. Documents have a status
 
@@ -212,7 +212,7 @@ automatic start of the implementer on `brief-approved` and of the review on "rea
 label with a notification · a real parser for the Bash guard · GitHub branch protection (unavailable
 on private repositories without a paid plan, so the kit's enforcement is local plus CI plus labels) ·
 anything for a language other than Python (the documents are language-agnostic; the gates are not).
-Each is on the kit's backlog with the friction that would promote it.
+Each stays absent until the friction log shows the friction that would promote it.
 
 ## 13. How the kit itself evolves
 

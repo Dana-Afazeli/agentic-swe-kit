@@ -219,13 +219,15 @@ page; the conformance reviewer judges whether it reads cold (P-06) and whether t
 | **project-owned** | `README.md` · `project.mk` · `src/<pkg>/**` · `tests/conftest.py` · `tests/test_*.py` · `docs/DELTAS.md` · `docs/ROADMAP.md` · `docs/FRICTION.md` · `docs/BACKLOG.md` · `docs/decisions/NNNN-*.md` · `docs/briefs/**` · `docs/research/**` · `uv.lock` · `kit.lock` | never touched (`kit.lock` is rewritten; `uv.lock` is re-locked) | yours |
 | **kit-only** | the kit's `README.md`, `CHANGELOG.md`, `LICENSE` (copied to `docs/kit/LICENSE`), the kit's own decisions, briefs, research notes, friction log, backlog, roadmap, its notes on maintaining itself, `docs/templates/**` | removed by `init`; never present in a project | — |
 
-A project receives `docs/briefs/` and `docs/research/` as empty folders (a `.gitkeep` each, which is
-project-owned: `init` hands it over and `update` never touches it); nothing the kit wrote in them
-comes with it, and `update` never touches a project's own briefs and notes there. `init` runs once,
-in a fresh copy of the kit, and removes every kit-only file under those folders: a file committed
-there before `init` is removed with them. No file a project receives names a record id or the path
-of a decision record, a brief or a note of the kit, and none outside `tests/` and the lock files
-carries a date: `tests/harness/test_stateless.py` renders the kit as a project and scans it.
+`init` hands a project `docs/briefs/` and `docs/research/` as empty folders (a `.gitkeep` each,
+which is project-owned: `update` never adds or touches it, so a project that `init` made without
+them has the folders when it first holds a file there); nothing the kit wrote in them comes with
+it, and `update` never touches a project's own briefs and notes there. `init` runs once, in a fresh
+copy of the kit, and removes every kit-only file under those folders: a file committed there before
+`init` is removed with them. No file a project receives names a record id or the path of a
+decision record, a brief or a note of the kit, and none outside `tests/` and the lock files carries
+a date written year-month-day: `tests/harness/test_stateless.py` renders the kit as a project and
+scans it.
 
 The list lives in `kit.py` (`CATEGORIES`, `SEEDS`); `tests/harness/test_kit.py` checks that every
 tracked file of the kit has an owner and every pattern names a file. Two exceptions inside the
