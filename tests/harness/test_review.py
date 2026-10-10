@@ -79,15 +79,18 @@ def test_a_reviewer_that_will_not_run_needs_no_model(capsys: pytest.CaptureFixtu
 
 
 def test_the_brief_is_found_from_the_branch_number() -> None:
-    # the names are those of `docs/briefs` at the PR's head, as GitHub lists them
+    # the names are those of `docs/briefs` at the PR's head, as GitHub lists them; the branch
+    # carries the project's prefix (a knob), so the test reads it rather than spelling it
     names = ["000-TEMPLATE.md", "006-dm-live.md", "007-other.md", "006-notes.txt"]
-    assert review.find_brief("main-006-dm-live", names) == Path("docs/briefs/006-dm-live.md")
-    assert review.find_brief("main-008-none", names) is None
-    assert review.find_brief("main-skill-review-loop", names) is None
+    prefix = review.BRANCH_PREFIX
+    assert review.find_brief(f"{prefix}-006-dm-live", names) == Path("docs/briefs/006-dm-live.md")
+    assert review.find_brief(f"{prefix}-008-none", names) is None
+    assert review.find_brief(f"{prefix}-skill-review-loop", names) is None
+    assert review.find_brief("other-006-dm-live", names) is None  # another prefix is not ours
 
 
 def test_two_briefs_with_one_number_is_no_answer() -> None:
-    assert review.find_brief("main-006-a", ["006-a.md", "006-b.md"]) is None
+    assert review.find_brief(f"{review.BRANCH_PREFIX}-006-a", ["006-a.md", "006-b.md"]) is None
 
 
 # --- records on the PR: the memory between rounds ----------------------------------------------
@@ -537,15 +540,20 @@ def test_the_reviewers_environment_leaves_out_the_launchers_virtual_environment(
         "PATH": "/work/checkout/.venv/bin:/usr/bin:/bin",
         "HOME": "/home/x",
     }
+    # The marker tells the Stop hook that this is a reviewer's clone: a reviewer changes nothing,
+    # and the branch's own red (a renamed test awaiting the label) must not hold it (PR 1).
+    marker = {review.REVIEWER_CLONE_VARIABLE: "1"}
     assert review.reviewer_env(environ, Path("/work/checkout")) == {
         "PATH": "/usr/bin:/bin",
         "HOME": "/home/x",
+        **marker,
     }
-    assert review.reviewer_env({"HOME": "/home/x"}, Path("/work")) == {"HOME": "/home/x"}
+    assert review.reviewer_env({"HOME": "/home/x"}, Path("/work")) == {"HOME": "/home/x", **marker}
     # only that environment's own entries go: a folder that merely starts with its name stays
     neighbours = {"PATH": "/work/checkout/.venv:/work/checkout/.venv-other/bin:/bin"}
     assert review.reviewer_env(neighbours, Path("/work/checkout")) == {
-        "PATH": "/work/checkout/.venv-other/bin:/bin"
+        "PATH": "/work/checkout/.venv-other/bin:/bin",
+        **marker,
     }
 
 

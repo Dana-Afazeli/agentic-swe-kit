@@ -4,11 +4,11 @@ name: ci
 
 on:
   pull_request:
-    branches: [main] # knob: base
+    branches: ["main"] # knob: base
     # labeled/unlabeled so gate-guard re-evaluates when `gates-approved` is added or removed
     types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
-    branches: [main] # knob: base
+    branches: ["main"] # knob: base
 
 permissions:
   contents: read
@@ -18,11 +18,10 @@ permissions:
 # Concurrency is set per job, not for the workflow. A newer run cancels the older run's check,
 # mutation, secrets and integrity jobs — but never gate-guard: a cancelled gate-guard would skip
 # the expiry of `gates-approved` for the push it was started for, and the next run would look
-# only at its own push (PR #5 review).
-
-env:
-  # What this run is compared against: the PR's base branch, or the previous tip on a push.
-  BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+# only at its own push.
+#
+# $BASE, what each job compares against, is set by .github/actions/base: the PR's base branch, the
+# previous tip on a push, or the root commit on the first push of a branch (FIRST_PUSH=true).
 
 jobs:
   check:
@@ -35,6 +34,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # diff-cover needs the base commit
+      - uses: ./.github/actions/base
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.11.x"
@@ -42,7 +42,7 @@ jobs:
       - run: make install
       - run: make check
       - name: diff coverage (changed lines >= 95 %, branches included)
-        # $BASE, not origin/main: on a push to main the two are the same commit and the diff is empty.
+        # $BASE, not origin/main: on a push to the base branch the two are the same commit and the diff is empty.
         run: uv run diff-cover coverage.xml --compare-branch="$BASE" --fail-under=95 --branch-coverage
 
   mutation:
@@ -55,6 +55,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/base
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.11.x"
@@ -93,6 +94,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/base
       - name: install betterleaks (pinned, checksum verified)
         run: |
           archive="$RUNNER_TEMP/betterleaks.tar.gz"
@@ -102,11 +104,16 @@ jobs:
           tar -xzf "$archive" -C "$RUNNER_TEMP/bin" betterleaks
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: scan the commits of this PR / push
-        run: betterleaks git . --redact --verbose --no-banner --log-opts="$BASE..HEAD"
+        run: |
+          if [ "$FIRST_PUSH" = true ]; then
+            betterleaks git . --redact --verbose --no-banner # the whole history: there is no earlier tip
+          else
+            betterleaks git . --redact --verbose --no-banner --log-opts="$BASE..HEAD"
+          fi
 
   integrity:
-    # No test vanishes, no skip is added, no check is switched off inline — unless the maintainer adds the
-    # label `checks-weakened-approved` (ADR-0008). The Stop hook runs the same script locally.
+    # No test vanishes, no skip is added, no check is switched off inline — unless the maintainer
+    # adds the label `checks-weakened-approved` (ADR-0005). The Stop hook runs the same script locally.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -117,6 +124,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # the script compares with the commit where the branch left the base
+      - uses: ./.github/actions/base
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.11.x"
@@ -148,8 +156,8 @@ jobs:
 
   gate-guard:
     # The agent never polices its own gates: a PR that touches gate configuration stays red
-    # until the maintainer adds the label `gates-approved`. The approval covers what the maintainer read: a push that
-    # touches a gate file removes the label, and the maintainer re-reads and re-labels.
+    # until the maintainer adds the label `gates-approved`. The approval covers what the maintainer
+    # read: a push that touches a gate file removes the label, and the maintainer re-reads and re-labels.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -161,6 +169,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/base
       - name: gate files need the label gates-approved
         env:
           GH_TOKEN: ${{ github.token }}

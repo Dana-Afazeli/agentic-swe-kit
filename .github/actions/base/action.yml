@@ -1,0 +1,30 @@
+# Sets BASE — the ref this run is compared against — for the steps that follow, and FIRST_PUSH.
+#
+# On a pull request: the PR's base branch. On a push: the previous tip. The first push of a branch
+# has no previous tip (github.event.before is forty zeros, and `0000…..HEAD` is not a range git
+# accepts), so the whole history counts, from the root commit: a new repository's first CI run
+# must be able to go green. Needs a checkout with `fetch-depth: 0`.
+name: base
+description: Sets BASE (the ref to compare against) and FIRST_PUSH for the steps that follow.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        BASE_REF: ${{ github.base_ref }}
+        BEFORE: ${{ github.event.before }}
+      run: |
+        first=false
+        if [ "$EVENT" = pull_request ]; then
+          base="origin/$BASE_REF"
+        elif [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
+          # On its own line so a failing `git rev-list` stops the job.
+          base=$(git rev-list --max-parents=0 HEAD | tail -1)
+          first=true
+        else
+          base="$BEFORE"
+        fi
+        echo "BASE=$base" >> "$GITHUB_ENV"
+        echo "FIRST_PUSH=$first" >> "$GITHUB_ENV"
+        echo "base: $base (first push: $first)"

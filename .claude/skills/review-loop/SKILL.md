@@ -176,7 +176,7 @@ Say which is which when you report; do not present a request as a control.
 - **Pushes from the clone: two nets.** Its `origin` has no push address, and a pre-push hook
   refuses every push. A push with the address typed out and `--no-verify` still gets out: the
   reviewer process has your credentials. The Bash guard, which runs in the clone too, refuses a
-  push that lands on `main` or `main`, and any change of labels.
+  push that lands on the base branch, and any change of labels.
 - **Nets, not walls**: the edit tools are denied inside the clone, and the plain spelling of a
   command that changes git state, changes the PR (`gh pr merge`, `gh pr edit`), or starts another
   `claude`, is refused. Another spelling gets through. In the clone that harms nothing; `gh` and
@@ -193,8 +193,11 @@ Say which is which when you report; do not present a request as a control.
   gate path is refused. Write files with the editor and keep shell commands plain.
 - In zsh, `cmd | tee f; echo $?` reports `tee`. Use `cmd > f 2>&1; echo "exit code: $?" >> f`.
 - `grep` here is ugrep and rejects some bounded patterns; use a short Python file for context.
-- A reviewer process ends with the project's Stop hook, which runs `make check` in the clone when
-  the branch changed code. Push a green head, or that run can end `FAILED`.
+- The project's hooks run in a reviewer process too. The Stop hook stands aside there (the launcher
+  marks the process with `KIT_REVIEWER_CLONE=1`): a reviewer changes nothing, and the branch's own
+  red — a renamed test awaiting the label — must not keep it from ending. Before that marker
+  existed, both reviewers of the kit's PR 1 ran to their time limits with their reports written and
+  unposted.
 - On a PR that has no brief, plan-reviewer cannot run: use `--only code` in every round. The
   `next:` line then closes the loop on the code review alone and says that plan-reviewer had no
   brief. With a brief, `--only` never closes the loop: the line asks for the reviewer left out.

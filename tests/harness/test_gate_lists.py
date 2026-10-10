@@ -16,6 +16,7 @@ from pathlib import Path
 
 import guard_bash
 import integrity
+import review
 import stop_gate
 
 # The nearest directory above this file that holds the workflow: the repository root, also when
@@ -121,3 +122,9 @@ def test_integrity_collects_with_the_marker_expression_make_check_runs() -> None
 
     assert len(runs) == 2
     assert all(f' -m "{integrity.GATE_MARKERS}"' in line for line in runs)
+
+
+def test_the_reviewer_clone_marker_is_one_name_in_both_scripts() -> None:
+    """`scripts/review.py` sets it, `scripts/stop_gate.py` reads it; neither imports the other.
+    A change to one string alone would send the reviewers back to running into the time limit."""
+    assert review.REVIEWER_CLONE_VARIABLE == stop_gate.REVIEWER_CLONE_VARIABLE

@@ -52,14 +52,14 @@ exclude = ["*.md"]
 # scripts/ holds the hooks and gate scripts, so it is checked like everything else. extraPaths
 # lets the tests import them; setting it replaces the default (`src`), so `src` is listed too.
 [tool.basedpyright]
-include = ["src", "tests", "scripts"]
-extraPaths = ["src", "scripts"]
+include = ["src", "tests", "scripts", "kit.py"]
+extraPaths = ["src", "scripts", "."]
 typeCheckingMode = "strict"
 pythonVersion = "3.13" # knob: python
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["scripts"]
+pythonpath = ["scripts", "."] # the gate scripts, and kit.py at the root
 addopts = "--strict-markers"
 asyncio_mode = "auto"
 markers = [
@@ -77,7 +77,7 @@ fail_under = 90
 show_missing = true
 
 # The one architecture contract the kit ships (docs/kit/HARNESS.md, "Architecture contract"):
-# `core` holds the decisions and stays pure; `io` and `main` hold the boundaries. Add the I/O
+# `core` holds the decisions and stays pure; `io` and `main.py` hold the boundaries. Add the I/O
 # packages your project uses to `forbidden_modules` (httpx, sqlalchemy, …) and add contracts as
 # the architecture grows; `make arch` enforces whatever is here.
 [tool.importlinter]
@@ -97,5 +97,5 @@ forbidden_modules = ["kitpkg.io", "kitpkg.main"] # knob: package
 source_paths = ["src/kitpkg"] # knob: package
 pytest_add_cli_args = ["-m", "not live and not eval and not prove"]
 pytest_add_cli_args_test_selection = ["tests/"]
-also_copy = ["scripts/", ".claude/"] # the harness tests import the gate scripts, which read .claude/
+also_copy = ["scripts/", ".claude/", "kit.py"] # the harness tests import the gate scripts (which read .claude/) and kit.py
 use_setproctitle = false

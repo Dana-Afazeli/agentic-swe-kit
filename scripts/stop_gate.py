@@ -14,6 +14,7 @@ would turn the gate into a one-time nudge. Claude Code itself ends the turn afte
 consecutive blocks, and that is the only way out (docs/kit/HARNESS.md, "Claude Code harness").
 """
 
+import os
 import subprocess
 import sys
 from collections.abc import Callable, Iterable
@@ -44,6 +45,11 @@ GATED_FILES = frozenset(
 )
 TAIL_LINES = 40
 LABEL = "checks-weakened-approved"
+# Set by scripts/review.py in the environment of a reviewer process. A reviewer works in a
+# throwaway clone of the PR's head and changes nothing; the gate is the author's. Without this,
+# the branch's own red — a renamed test the maintainer has yet to approve — kept both reviewers
+# of the kit's PR 1 from ever stopping, until the launcher's time limit ended them.
+REVIEWER_CLONE_VARIABLE = "KIT_REVIEWER_CLONE"
 
 Runner = Callable[[list[str]], CompletedProcess[str]]
 
@@ -93,6 +99,9 @@ def _output(result: CompletedProcess[str]) -> str:
 
 
 def main(run: Runner = run_in_root) -> int:
+    if os.environ.get(REVIEWER_CLONE_VARIABLE) == "1":
+        print("stop gate: a reviewer's clone; the gate is the author's to pass", file=sys.stderr)
+        return 0
     try:
         return _gate(run)
     except Exception as error:  # anything at all: a traceback exits 1, and exit 1 does not block

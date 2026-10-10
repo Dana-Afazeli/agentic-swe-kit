@@ -29,7 +29,7 @@ def write_stats(directory: Path, **changes: int) -> Path:
 @pytest.fixture(autouse=True)
 def no_mutmut_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
     def offenders() -> list[str]:
-        return ["kitpkg.core.probe.x_add__mutmut_1: survived"]
+        return ["pkg.core.probe.x_add__mutmut_1: survived"]
 
     monkeypatch.setattr(mutation_gate, "offending_mutants", offenders)
 
@@ -51,7 +51,7 @@ def test_each_failing_status_fails(
     err = capsys.readouterr().err
     assert err.startswith("mutation gate: FAIL (")
     assert f"{status}=1" in err
-    assert "  kitpkg.core.probe.x_add__mutmut_1: survived\n" in err
+    assert "  pkg.core.probe.x_add__mutmut_1: survived\n" in err
 
 
 def test_failing_statuses_are_the_five_unverified_ones() -> None:
@@ -86,15 +86,15 @@ def test_unreadable_stats_exit_2(content: str, tmp_path: Path) -> None:
 
 def test_parse_offenders_keeps_only_failing_statuses() -> None:
     output = (
-        "    kitpkg.main.x_main__mutmut_1: killed\n"
-        "    kitpkg.core.a.x_f__mutmut_1: survived\n"
-        "    kitpkg.core.a.x_g__mutmut_1: no tests\n"
-        "    kitpkg.core.a.x_h__mutmut_1: timeout\n"
-        "    kitpkg.core.a.x_i__mutmut_1: segfault\n"
-        "    kitpkg.core.a.x_j__mutmut_1: not checked\n"
+        "    pkg.main.x_main__mutmut_1: killed\n"
+        "    pkg.core.a.x_f__mutmut_1: survived\n"
+        "    pkg.core.a.x_g__mutmut_1: no tests\n"
+        "    pkg.core.a.x_h__mutmut_1: timeout\n"
+        "    pkg.core.a.x_i__mutmut_1: segfault\n"
+        "    pkg.core.a.x_j__mutmut_1: not checked\n"
     )
     assert mutation_gate.parse_offenders(output) == [
-        "kitpkg.core.a.x_f__mutmut_1: survived",
-        "kitpkg.core.a.x_g__mutmut_1: no tests",
-        "kitpkg.core.a.x_i__mutmut_1: segfault",
+        "pkg.core.a.x_f__mutmut_1: survived",
+        "pkg.core.a.x_g__mutmut_1: no tests",
+        "pkg.core.a.x_i__mutmut_1: segfault",
     ]

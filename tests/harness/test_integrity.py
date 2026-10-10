@@ -144,13 +144,12 @@ def test_collect_ids_names_a_broken_module_relative_to_the_tree(tmp_path: Path) 
 def test_collect_ids_imports_the_trees_own_package_not_the_installed_one(tmp_path: Path) -> None:
     """The base tree's tests import the base tree's `src/`: a module the PR renamed or removed
     must not turn every test that used it into a "vanished" one (PR #5 review)."""
-    (tmp_path / "src" / "kitpkg").mkdir(parents=True)
-    (tmp_path / "src" / "kitpkg" / "__init__.py").write_text("", "utf-8")
-    (tmp_path / "src" / "kitpkg" / "only_in_this_tree.py").write_text("VALUE = 1\n", "utf-8")
+    (tmp_path / "src" / "pkg").mkdir(parents=True)
+    (tmp_path / "src" / "pkg" / "__init__.py").write_text("", "utf-8")
+    (tmp_path / "src" / "pkg" / "only_in_this_tree.py").write_text("VALUE = 1\n", "utf-8")
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_uses_it.py").write_text(
-        "from kitpkg.only_in_this_tree import VALUE\n\n\n"
-        "def test_it() -> None:\n    assert VALUE\n",
+        "from pkg.only_in_this_tree import VALUE\n\n\ndef test_it() -> None:\n    assert VALUE\n",
         "utf-8",
     )
 
