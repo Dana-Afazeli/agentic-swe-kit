@@ -444,8 +444,16 @@ def test_the_first_step_of_the_maintainer_says_whether_the_review_is_remaining_o
     not_the_page = conformance.split("**P-07 Not the page.**", 1)[1].split("Not style", 1)[0]
 
     assert all(state in steps for state in states)
+    # one meaning: the template defines the three words and the loop and the reviewer judge by it
+    for rule in ("when every reviewer is green", "when the rounds are used"):
+        assert rule in steps, rule
+        assert rule in close_out, rule
+    assert "is not green" in not_the_page
+    assert "while a finding is still open" not in not_the_page
     assert "Review: remaining" in example_steps
     assert "Review: remaining" in show_page
+    # the sentence about the script's checks keeps its subject: the script, not the review line
+    assert "The script checks the page's shape and not its words" in implementer
     assert "Review: remaining" in loop.split("## 2.", 1)[0]
     assert "Review: done" in close_out
     assert "Review: stopped" in close_out

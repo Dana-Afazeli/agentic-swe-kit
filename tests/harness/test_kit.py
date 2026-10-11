@@ -6,6 +6,7 @@ template" on GitHub hands a new project. Kit-only: the kit's tree is what it tes
 
 import ast
 import fnmatch
+import json
 import os
 import re
 import shutil
@@ -1328,6 +1329,7 @@ SEPARATOR = re.compile(r"^\|(?:\s*:?-+:?\s*\|)+$")
 SWITCHING = re.compile(r"git (?:switch|checkout)")
 REFUSAL = re.compile(r"refus|denied|deny", re.IGNORECASE)
 RECEIVED_DOCS = ("README.md", "AGENTS.md", "docs/kit", ".claude/skills", "docs/templates")
+REFUSING_SCRIPTS = ("guard_bash.py", "review.py")
 
 
 def sentences(text: str) -> list[str]:
@@ -1372,19 +1374,72 @@ def test_no_document_tells_a_session_to_switch_a_branch_or_says_worktrees_are_no
     assert told == []
 
 
+def denied_commands() -> list[str]:
+    """The commands of the `deny` rules of the settings, as a session would type them."""
+    settings = json.loads((ROOT / ".claude" / "settings.json").read_text("utf-8"))
+    rules: list[str] = settings["permissions"]["deny"]
+    return [
+        rule.removeprefix("Bash(").removesuffix(")").removesuffix(":*")
+        for rule in rules
+        if rule.startswith("Bash(")
+    ]
+
+
+def refused_advice(text: str, commands: list[str]) -> list[str]:
+    """The denied commands that `text` names, whatever else the sentence says about them: a
+    message that is itself a refusal is where such advice would sit. A command is not named by
+    a longer one that is allowed (`git push origin main-007-x` is not `git push origin main`)."""
+    return [command for command in commands if re.search(re.escape(command) + r"(?![\w-])", text)]
+
+
+def test_a_message_that_names_a_denied_command_is_found_whatever_its_sentence_says() -> None:
+    commands = denied_commands()
+    messages = [
+        "the tree is half updated: `git checkout -- . && git clean -fd` takes it back",
+        "the update was refused half way: `git checkout -- .` takes it back",
+        "the branch is behind: `git reset --hard origin/main` takes it back",
+        "the push was rejected: `git push --force` puts it there",
+        "the hook is red: `git commit --no-verify` goes round it",
+        "the label is missing: `gh pr edit --add-label gates-approved` adds it",
+        "to start over: `git switch -c main-007-x`",
+    ]
+
+    assert [bool(refused_advice(each, commands)) for each in messages] == [True] * len(messages)
+    assert (
+        refused_advice("push `git push origin main-007-x` and open the pull request", commands)
+        == []
+    )
+    assert refused_advice("`git push` from the tree, or put them on a branch", commands) == []
+
+
 def test_no_message_a_tool_of_the_kit_prints_tells_a_session_to_run_a_command_it_is_refused() -> (
     None
 ):
-    """The settings deny `git switch` and `git checkout`, so a message that `kit.py` or a script
-    prints must not name them as advice: a session that follows it is refused its first command.
-    `review.py` is left out: its list of commands a reviewer may not run is the refusal itself."""
+    """A session that follows a message of a tool of the kit is refused its first command if the
+    message names one of the settings' denied commands. Every string a script prints is read, not
+    its docstrings; `guard_bash.py` and `review.py` are left out, as their strings are the refusals
+    and the list of commands a reviewer may not run."""
+    commands = denied_commands()
     files = [ROOT / "kit.py"]
-    files += [f for f in sorted((ROOT / "scripts").glob("*.py")) if f.name != "review.py"]
+    files += [f for f in sorted((ROOT / "scripts").glob("*.py")) if f.name not in REFUSING_SCRIPTS]
+    files += sorted((ROOT / ".claude" / "skills").glob("*/scripts/*.py"))
     told: list[str] = []
     for path in files:
-        for node in ast.walk(ast.parse(path.read_text("utf-8"))):
-            if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                told += [f"{path.name}: {s}" for s in switch_instructions(node.value)]
+        tree = ast.parse(path.read_text("utf-8"))
+        docstrings = {
+            id(node.body[0].value)
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.body
+            and isinstance(node.body[0], ast.Expr)
+        }
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and id(node) not in docstrings
+            ):
+                told += [f"{path.name}: {c}" for c in refused_advice(node.value, commands)]
 
     assert told == []
 

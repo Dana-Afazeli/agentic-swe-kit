@@ -7,12 +7,13 @@ Brief: [`docs/briefs/NNN-slug.md`](docs/briefs/NNN-slug.md)
      refuses a page that still holds one, or a part with nothing written under it. -->
 
 ## Next steps for the maintainer
-<!-- The first item says where the review stands: "Review: remaining" (not started, running, or
-     stopped with findings open), "Review: done" with each reviewer's verdict, or "Review:
-     stopped" with what is left open. Then every action only the maintainer can take, in the
-     order to take it, one checkbox each, and what each one unblocks: what to read first, a label
-     to add, a check to run by hand, the merge last. If nothing is needed but the read, the
-     others are one item: "- [ ] Read the diff and merge." -->
+<!-- The first item says where the review stands, in one of three forms: "Review: remaining"
+     from the first push until the loop closes; "Review: done" when every reviewer is green, with
+     each verdict and every thread still open named; "Review: stopped" when the rounds are used
+     and a reviewer is not green, with what is left open. Then every action only the maintainer
+     can take, in the order to take it, one checkbox each, and what each one unblocks: what to
+     read first, a label to add, a check to run by hand, the merge last. If nothing is needed
+     but the read, the others are one item: "- [ ] Read the diff and merge." -->
 - [ ]
 
 ## Decisions for the maintainer

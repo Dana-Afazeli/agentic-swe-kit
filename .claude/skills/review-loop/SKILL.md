@@ -174,8 +174,9 @@ Reached when the `next:` line says every reviewer is green, or says to stop.
    record", give one line per reviewer run, copied from its record comment: round, asked,
    answered, verdict, cost, time. Bring "Next steps for the maintainer", "Decisions for the
    maintainer" and "Docs made stale, and fixed" up to date. The first item of the steps becomes
-   `Review: done` with each reviewer's last verdict when every reviewer is green, and `Review:
-   stopped` with what is left open when the rounds are used; it is never left at `remaining`.
+   `Review: done` when every reviewer is green, naming each last verdict and every thread still
+   open, and `Review: stopped` when the rounds are used and a reviewer is not green, naming what
+   is left open; it is never left at `remaining`. The template defines the three words.
 3. Append `docs/FRICTION.md` lines for what went wrong, was slow or confused. Take figures from
    saved files, not from memory.
 4. **I-17** Post the closing comment on the PR, the last thing on it and the one the maintainer
