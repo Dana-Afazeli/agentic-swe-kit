@@ -15,16 +15,13 @@ tracked in the roadmap from then on) · ~~rejected — reason~~.
 
 | added | item | notes | state |
 |---|---|---|---|
-| | | | |
 
 ## Workflow and harness
 
 | added | item | notes | state |
 |---|---|---|---|
-| | | | |
 
 ## Hygiene
 
 | added | item | notes | state |
 |---|---|---|---|
-| | | | |

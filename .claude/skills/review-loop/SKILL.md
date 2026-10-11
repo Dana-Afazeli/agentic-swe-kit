@@ -43,7 +43,9 @@ do not pick.
 
 Models: `sonnet`, `opus`, `fable`, or a full model name. Efforts: `low`, `medium`, `high`, `xhigh`,
 `max`. Before the first call, tell the maintainer in one line what will run: the reviewers, the
-model and effort of each, the number of rounds.
+model and effort of each, the number of rounds. Set the page so that the first item under "Next
+steps for the maintainer" reads `Review: remaining`, with the reviewers and the rounds, if it does
+not yet: that line is how the maintainer sees where the review stands.
 
 The command works out the rest: which reviewers still have to run (not green, rounds left), the
 round number, the brief (`docs/briefs/NNN-*.md`, from the branch name), what each reviewer is told,
@@ -111,7 +113,8 @@ by reflex.
    - **reject with evidence**: say what you ran and what it showed;
    - **park**: true, out of scope: one line in `docs/BACKLOG.md`;
    - **the maintainer's decision**: a rule would have to change: put it on the page under
-     "Decisions for the maintainer", standing alone, with the options and your recommendation.
+     "Decisions for the maintainer", standing alone, in the shape of I-12: one bullet per
+     option, each with its To build and its To use, and your recommendation.
 3. If a finding is partly right, fix that part and say which part you did not take.
 
 ## 3. Fix with TDD, and check what the fix costs elsewhere
@@ -170,7 +173,10 @@ Reached when the `next:` line says every reviewer is green, or says to stop.
 2. Set the page and post the proofs once more (`references/commands.md`). Under "The review
    record", give one line per reviewer run, copied from its record comment: round, asked,
    answered, verdict, cost, time. Bring "Next steps for the maintainer", "Decisions for the
-   maintainer" and "Docs made stale, and fixed" up to date.
+   maintainer" and "Docs made stale, and fixed" up to date. The first item of the steps becomes
+   `Review: done` when every reviewer is green, naming each last verdict and every thread still
+   open, and `Review: stopped` when the rounds are used and a reviewer is not green, naming what
+   is left open; it is never left at `remaining`. The template defines the three words.
 3. Append `docs/FRICTION.md` lines for what went wrong, was slow or confused. Take figures from
    saved files, not from memory.
 4. **I-17** Post the closing comment on the PR, the last thing on it and the one the maintainer

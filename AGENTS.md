@@ -29,17 +29,18 @@ anything else. A rule that lives in a skill is invisible to a session that has n
 
 ## Git, labels and gate files
 - Never commit or push to `main`. Never merge a pull request, force-push, or
-  `git commit --no-verify`. A branch is brought up to date with `git merge origin/main`.
+  `git commit --no-verify`. A branch is brought up to date with `git merge origin/main` and pushed
+  before `gh pr ready` (GitHub does not honour `.gitattributes`: the logs conflict there).
 - Labels are the maintainer's (`brief-approved`, `gates-approved`, `checks-weakened-approved`,
   `scope-approved`): never add, remove or create one. Ask in the PR. `gh api` is for reading, for
   comments and reviews on the PR, and for resolving review threads.
 - Gate files — `Makefile`, `pyproject.toml`, `uv.lock`, `.pre-commit-config.yaml`, `.python-version`,
-  `.gitignore`, `.betterleaks*`, `kit.py`, `.claude/**`, `.github/**`, `scripts/**` — need
-  `gates-approved`, and each push that touches one removes the label again. So does any tool's own
-  config file (`pytest.ini`, `ruff.toml`, `pyrightconfig.json`, `setup.cfg`, `GNUmakefile`, …): it
-  would override `pyproject.toml` or the `Makefile`. Configuration goes in those two. Change them
-  with the editor so the maintainer sees every diff; the Bash guard refuses shell writes to them
-  (`uv add|remove|lock|sync` are fine).
+  `.gitignore`, `.gitattributes`, `.betterleaks*`, `kit.py`, `.claude/**`, `.github/**`,
+  `scripts/**` — need `gates-approved`, and each push that touches one removes the label again. So
+  does any tool's own config file (`pytest.ini`, `ruff.toml`, `pyrightconfig.json`, `setup.cfg`,
+  `GNUmakefile`, …): it would override `pyproject.toml` or the `Makefile`. Configuration goes in
+  those two. Change them with the editor so the maintainer sees every diff; the Bash guard refuses
+  shell writes to them (`uv add|remove|lock|sync` are fine).
 - The Bash guard (`scripts/guard_bash.py`) also refuses `rm` on tracked files, `rm -r/-f` outside
   the repository and the temp directory, and `rm` on a path it cannot resolve. Name paths
   literally, from the repository root.
@@ -49,8 +50,8 @@ anything else. A rule that lives in a skill is invisible to a session that has n
 - The maintainer carries no context from your session and decides too many things to remember any
   of them. Write every text they read as if they had never seen this repository: define each term
   at first use, and never point at "finding 3", "round 2" or "the thread" without saying what it is.
-- Each decision stands alone: the situation in plain words, the options and what each costs to
-  build and to whoever uses the result, your recommendation, the one word to reply.
+- Each decision stands alone: the situation in plain words, the options (one bullet each) and what
+  each costs to build and to whoever uses the result, your recommendation, the one word to reply.
 - A text says what the thing is. How it came to be so belongs in a commit message, a PR comment or
   `docs/FRICTION.md`, never in a brief, a description, a doc or a code comment.
 
@@ -70,7 +71,8 @@ anything else. A rule that lives in a skill is invisible to a session that has n
 - Facts about Claude Code and the tools come from `docs/research/`, not from memory. If a fact is
   missing, look it up, verify it, and write it down there with the date.
 - State lives in files and git, never in a conversation: the next session sees only the repository.
-- One session per checkout. Never `git switch` in a folder another session is using; clone a copy.
+- One session per tree: a brief runs in its own tree, `make tree BRIEF=NNN` (`NEW=<name>` for a
+  new branch); `make untree` removes it. `git switch` and `git checkout` are denied.
 - `make eval` costs money: run it only when a brief says so. No global installs: everything goes
   through `uv` and the lockfile.
 

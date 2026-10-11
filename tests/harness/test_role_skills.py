@@ -208,7 +208,7 @@ def test_agents_md_keeps_what_every_role_needs() -> None:
         "scope-approved",
         "Secrets never enter the repo",
         "docs/research/",
-        "One session per checkout",
+        "One session per tree",
         "make eval",
         "No global installs",
         "## Project rules",
@@ -388,3 +388,73 @@ def test_work_beyond_the_brief_is_approved_by_a_label_that_both_roles_know() -> 
     assert "words" in differs
     assert label in differs
     assert label in flat(ROOT / "AGENTS.md")
+
+
+# --- how a decision is put to the maintainer ------------------------------------------------------
+
+
+def test_a_decision_is_a_list_with_one_bullet_per_option_and_each_has_both_costs() -> None:
+    """A decision put to the maintainer is not a paragraph: one bullet per option, however few,
+    each saying what it is "To build" and what it is "To use". Each role that asks one says so in
+    its own skill, with the same two labels, and the template and the example show them."""
+    shape = ("one bullet per option", "To build", "To use")
+
+    def flat(*parts: str) -> str:
+        return " ".join((SKILLS.joinpath(*parts)).read_text("utf-8").split())
+
+    places = {
+        "implementer SKILL": flat("implementer", "SKILL.md"),
+        "implementer template": flat("implementer", "assets", "pr-page.md"),
+        "implementer example": flat("implementer", "references", "page.md"),
+        "brief-writer SKILL": flat("brief-writer", "SKILL.md"),
+        "brief-writer example": flat("brief-writer", "references", "decisions.md"),
+        "review-loop SKILL": flat("review-loop", "SKILL.md"),
+    }
+
+    missing = [
+        (place, phrase) for place, text in places.items() for phrase in shape if phrase not in text
+    ]
+    assert missing == []
+    # one pair of labels: the older wording of the second one is gone
+    assert not [place for place, text in places.items() if "What a user notices" in text]
+
+
+# --- the state of the review ----------------------------------------------------------------------
+
+
+def test_the_first_step_of_the_maintainer_says_whether_the_review_is_remaining_or_done() -> None:
+    """The maintainer's checklist opens with one line that says where the review stands:
+    `Review: remaining`, `Review: done` or `Review: stopped`. The template asks for it, the
+    example shows it, the implementer and the review loop each say when it is set, and the
+    conformance reviewer counts a page without it as not the page."""
+    states = ("Review: remaining", "Review: done", "Review: stopped")
+
+    def flat(*parts: str) -> str:
+        return " ".join((SKILLS.joinpath(*parts)).read_text("utf-8").split())
+
+    template = flat("implementer", "assets", "pr-page.md")
+    steps = template.split("## Next steps for the maintainer", 1)[1].split("## ", 1)[0]
+    example = flat("implementer", "references", "page.md")
+    example_steps = example.split("## Next steps for the maintainer", 1)[1].split("## ", 1)[0]
+    implementer = flat("implementer", "SKILL.md")
+    show_page = implementer.split("**I-10**", 1)[1].split("**I-11**", 1)[0]
+    loop = flat("review-loop", "SKILL.md")
+    close_out = loop.split("## 5. Close out", 1)[1]
+    conformance = flat("reviewer", "references", "conformance.md")
+    not_the_page = conformance.split("**P-07 Not the page.**", 1)[1].split("Not style", 1)[0]
+
+    assert all(state in steps for state in states)
+    # one meaning: the template defines the three words and the loop and the reviewer judge by it
+    for rule in ("when every reviewer is green", "when the rounds are used"):
+        assert rule in steps, rule
+        assert rule in close_out, rule
+    assert "is not green" in not_the_page
+    assert "while a finding is still open" not in not_the_page
+    assert "Review: remaining" in example_steps
+    assert "Review: remaining" in show_page
+    # the sentence about the script's checks keeps its subject: the script, not the review line
+    assert "The script checks the page's shape and not its words" in implementer
+    assert "Review: remaining" in loop.split("## 2.", 1)[0]
+    assert "Review: done" in close_out
+    assert "Review: stopped" in close_out
+    assert "Review:" in not_the_page

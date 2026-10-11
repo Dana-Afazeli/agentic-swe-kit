@@ -32,8 +32,11 @@ The steps are in order. A rule that someone can check starts with its id, in bol
 3. **I-02** The PR carries the label `brief-approved`, or you stop: post one comment on the PR
    saying that an implementer is waiting for the label, tell the maintainer, and change nothing.
    A brief can say it was approved when its PR was not, and labels are the maintainer's.
-4. Switch to the brief's branch, in a folder no other session is working in. Read the brief in
-   full, then every comment on the PR (`gh api repos/<o>/<r>/issues/<n>/comments`): the planning
+4. Work in the brief's own tree: a folder where the branch `<base>-NNN-slug` is checked out and
+   no other session works. `git branch --show-current` must name that branch. If the session
+   was started anywhere else, stop and tell the maintainer: the session is to be started
+   inside the tree.
+   Read the brief in full, then every comment on the PR (`gh api repos/<o>/<r>/issues/<n>/comments`): the planning
    session leaves corrections there. Do what the brief's first lines say; if it names a pull
    request that has to be merged first and it is not, tell the maintainer at once and go on with
    what does not depend on it.
@@ -135,13 +138,21 @@ What you show is two things, and they are kept apart so that the maintainer's pa
    what the pull request is at its head, and nothing about its earlier versions or the
    conversation that shaped it. `references/page.md` has one filled page and three mistakes to
    avoid. The script refuses a page that is too long, has a part missing or with nothing under
-   it, or still holds a comment of the template; fix the page, not the script. It checks the
-   page's shape and not its words: whether the page can be read cold is yours to get right, and
-   the conformance reviewer's to judge.
+   it, or still holds a comment of the template; fix the page, not the script. The script checks
+   the page's shape and not its words: whether the page can be read cold is yours to get right,
+   and the conformance reviewer's to judge. The first item under "Next steps for the maintainer"
+   says where the review stands, so that the maintainer sees it before anything else: `Review:
+   remaining` until the loop has closed, and then `done` or `stopped` as the template defines
+   them (step 5 sets it).
 3. **I-11** Rebuild the page, and post the proofs again, at each push that changes the diff. The
    conformance reviewer reads both in every round, and a page that describes the last push but
    one is reported as a mismatch.
-4. **I-12** A decision you put to the maintainer names the command or the run that checked each
+4. **I-12** A decision you put to the maintainer is a block of its own, built the same way each
+   time: the situation in plain words; then one bullet per option, however few, each saying what
+   it is **To build** and what it is **To use** (what the person using the result sees, waits for
+   or has to do); then your recommendation and the one word to reply. Options are never run
+   together in a sentence, and no option has a benefit without its cost. `references/page.md`
+   has one filled. It names the command or the run that checked each
    fact it rests on, and you run the case the decision is about before you describe it. Record
    what the maintainer said and what you added as two things: a field you chose in order to
    answer a question is yours, not "decided by the maintainer". A decision described from a

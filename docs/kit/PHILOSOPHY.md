@@ -32,7 +32,7 @@ puts every rule that matters in the second category and keeps the first category
 | Short instructions file | Context spent only on what the code cannot say | `AGENTS.md` ≤ 85 lines — what every role needs; what one role needs lives in that role's skill — pruned weekly |
 | Maker ≠ checker | The model that wrote the code does not grade it | `scripts/review.py` starts the reviewers as separate processes, in a throwaway clone, on a named model |
 | Human gate at the PR | The maintainer reads every diff while no verifier has earned trust | One PR per unit, a page of at most 80 lines written for the maintainer, the maintainer merges |
-| Context as a budget | No kitchen-sink sessions | A fresh session per brief; state lives in files and git; one session per checkout |
+| Context as a budget | No kitchen-sink sessions | A fresh session per brief; state lives in files and git; one session per tree |
 | Someone can explain the code | The maintainer owns the design, not only the output | A page in every PR; small units; a decision record for every decision |
 | Enforce, don't advise | Corrections become machine checks | Hooks, import contracts, the coverage floor, the mutation gate, CI, permission rules |
 | Compound | Each unit leaves the repo easier for the next agent | The friction log, the compounding step of the inner loop, the skills folder |
@@ -128,12 +128,14 @@ puts everything a session needs in the repository, never in a conversation:
   repo, never the planning conversation. A planning session's memory is not where requirements
   live — a requirement parked in a session's notes is lost with the session, which is why state
   lives in files and git.
-- **One session per checkout.** A working directory belongs to the session that runs in it. A branch
+- **One session per tree.** A working directory belongs to the session that runs in it. A branch
   switch changes what every process in that folder sees: a planning session that switches branches
   in a folder where an implementer is working makes the implementer's committed files vanish from
-  its working tree mid-run. A second session that needs the repo clones its own copy. The reviewers
-  get a throwaway clone of the PR's head for the same reason; a review does not depend on what any
-  session does to any checkout.
+  its working tree mid-run. So a brief runs in a tree of its own, a git worktree of the development
+  checkout beside it, and a tree keeps its branch: a lock refuses a second session's editing tools,
+  and `git switch` and `git checkout` are refused. Several briefs are then built side by side, each
+  with its own folder, branch and gate. The reviewers get a throwaway clone of the PR's head for the
+  same reason; a review does not depend on what any session does to any tree.
 - **`AGENTS.md` ≤ 85 lines**, loaded at session start, pruned weekly with one question per line:
   would removing it cause a mistake? There is no `CLAUDE.md` in a kit project: Claude Code reads
   `AGENTS.md` only when no `CLAUDE.md` exists, so the second file would silence the first.

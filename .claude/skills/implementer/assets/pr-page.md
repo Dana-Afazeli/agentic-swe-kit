@@ -7,16 +7,24 @@ Brief: [`docs/briefs/NNN-slug.md`](docs/briefs/NNN-slug.md)
      refuses a page that still holds one, or a part with nothing written under it. -->
 
 ## Next steps for the maintainer
-<!-- Every action only the maintainer can take, in the order to take it, one checkbox each, and
-     what each one unblocks: what to read first, a label to add, a check to run by hand, the merge
-     last. If nothing is needed but the read: "- [ ] Read the diff and merge." -->
+<!-- The first item says where the review stands, in one of three forms: "Review: remaining"
+     from the first push until the loop closes; "Review: done" when every reviewer is green, with
+     each verdict and every thread still open named; "Review: stopped" when the rounds are used
+     and a reviewer is not green, with what is left open. Then every action only the maintainer
+     can take, in the order to take it, one checkbox each, and what each one unblocks: what to
+     read first, a label to add, a check to run by hand, the merge last. If nothing is needed
+     but the read, the others are one item: "- [ ] Read the diff and merge." -->
 - [ ]
 
 ## Decisions for the maintainer
-<!-- "None." or one block per decision, each readable on its own: the situation in plain words ·
-     the options and what each costs to build and to whoever uses the result · your
-     recommendation · the one word to reply. Name the command or the run that checked each fact
-     the decision rests on. -->
+<!-- "None." or one block per decision, each readable on its own, in this shape:
+     **The question, as a question.** The situation in plain words, and the command or the run
+     that checked each fact it rests on; then the options and what each costs to build and to
+     whoever uses the result, as follows.
+     - `option` — To build: what it takes. To use: what the person using the result sees, waits
+       for or has to do.
+     (one bullet per option, however few, each with both costs; never the options in a sentence)
+     Recommendation `option`, and why. Reply `option` or `option`. -->
 
 ## Not proven
 <!-- What the tests cannot show, and what would show it: where the maintainer can check by hand,

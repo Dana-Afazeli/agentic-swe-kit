@@ -4,7 +4,9 @@
 template" on GitHub hands a new project. Kit-only: the kit's tree is what it tests.
 """
 
+import ast
 import fnmatch
+import json
 import os
 import re
 import shutil
@@ -15,6 +17,7 @@ from pathlib import Path
 
 import kit
 import pytest
+from test_doc_tables import table_problems
 from test_knobs import check_all
 
 import conftest
@@ -162,6 +165,14 @@ def test_every_seed_source_is_tracked_and_kit_only() -> None:
         (".claude/settings.json", SETTINGS_BEFORE, SETTINGS_AFTER),
         ("AGENTS.md", PROSE_BEFORE, PROSE_AFTER),
         ("README.md", "git switch -c main-kit-update\n", "git switch -c unit-kit-update\n"),
+        # `render_text` rewrites any text: the three cases above stay as they were, although the
+        # settings and the README no longer hold those commands; these are the ones they hold
+        ("README.md", "make tree NEW=main-kit-update\n", "make tree NEW=unit-kit-update\n"),
+        (
+            ".claude/settings.json",
+            '"Bash(git push -u origin main-:*)",\n"Bash(git switch:*)",\n',
+            '"Bash(git push -u origin unit-:*)",\n"Bash(git switch:*)",\n',
+        ),
         (
             "scripts/review.py",
             'WORK = Path(tempfile.gettempdir()) / "kitpkg-review"  # knob: package\n',
@@ -453,8 +464,10 @@ def test_init_with_another_base_and_prefix_rewrites_the_rules(copy_of_the_kit: P
     def text(path: str) -> str:
         return (copy_of_the_kit / path).read_text("utf-8")
 
-    assert '"Bash(git switch -c unit-:*)"' in text(".claude/settings.json")
+    assert '"Bash(git push -u origin unit-:*)"' in text(".claude/settings.json")
     assert '"Bash(gh pr create --base develop:*)"' in text(".claude/settings.json")
+    assert 'BASE_BRANCH = "develop"  # knob: base' in text("scripts/tree.py")
+    assert 'BRANCH_PREFIX = "unit"  # knob: prefix' in text("scripts/tree.py")
     assert 'BASE_BRANCH = "develop"  # knob: base' in text("scripts/stop_gate.py")
     assert 'BRANCH_PREFIX = "unit"  # knob: prefix' in text("scripts/review.py")
     assert 'branches: ["develop"] # knob: base' in text(".github/workflows/ci.yml")
@@ -531,6 +544,12 @@ def test_a_rendered_projects_harness_tests_pass_with_other_names(tmp_path: Path)
         "test_roles.py",
         "test_pr.py",
         "test_role_skills.py",
+        # `make tree` and the session lock, whose tests build every branch name from the knobs
+        "test_tree.py",
+        "test_tree_names.py",
+        "test_session_lock.py",
+        "test_doc_tables.py",
+        "test_settings_rules.py",
     ]
     # with the reviewer-clone marker set, as in a reviewer's own `make check`: the fixture in the
     # rendered conftest removes it, so the Stop gate's tests there still see the gate
@@ -922,7 +941,7 @@ def test_update_merges_the_rendered_trees_not_the_raw_kit(
     assert result.returncode == 0, result.stdout + result.stderr
     settings = (project / ".claude/settings.json").read_text("utf-8")
     assert (
-        '"Bash(git switch -c unit-:*)"' in settings
+        '"Bash(git push -u origin unit-:*)"' in settings
         and '"Bash(gh pr create --base develop:*)"' in settings
     )
     assert no_markers(project)
@@ -1274,3 +1293,162 @@ def test_a_temporary_directory_inside_the_project_is_refused(
     result = kit_py(project, "update", "--to", "v0.2.0", "--no-sync", env=env)
     assert result.returncode == 2, result.stdout + result.stderr
     assert "inside the project" in result.stdout and git(project, "status", "--porcelain") == ""
+
+
+# ---------------------------------------------------------------------------- parallel trees
+
+
+def test_gitattributes_is_kit_owned_and_a_rendered_project_holds_it(tmp_path: Path) -> None:
+    assert kit.category(".gitattributes") == "kit-owned"
+    assert kit.is_managed(".gitattributes")
+    rendered = tmp_path / "rendered"
+
+    kit.render_tree(ROOT, rendered, ANSWERS, kit.tracked_files(ROOT))
+
+    held = (rendered / ".gitattributes").read_text("utf-8").splitlines()
+    assert held == ["docs/BACKLOG.md merge=union", "docs/FRICTION.md merge=union"]
+
+
+def test_the_logs_a_project_starts_with_have_no_problem(tmp_path: Path) -> None:
+    rendered = tmp_path / "rendered"
+    kit.render_tree(ROOT, rendered, ANSWERS, kit.tracked_files(ROOT))
+
+    for log in ("docs/BACKLOG.md", "docs/FRICTION.md"):
+        assert table_problems((ROOT / log).read_text("utf-8")) == [], f"the kit's {log}"
+        seeded = (rendered / log).read_text("utf-8")
+        assert table_problems(seeded) == [], f"the project's {log}"
+        # a project starts with its tables empty: each is a header and a separator, and no row
+        table = [line for line in seeded.splitlines() if line.startswith("|")]
+        assert len(table) % 2 == 0
+        assert all(SEPARATOR.match(line) for line in table[1::2]), log
+    backlog = (rendered / "docs/BACKLOG.md").read_text("utf-8")
+    assert len([line for line in backlog.splitlines() if line.startswith("|")]) == 6  # 3 tables
+
+
+SEPARATOR = re.compile(r"^\|(?:\s*:?-+:?\s*\|)+$")
+SWITCHING = re.compile(r"git (?:switch|checkout)")
+REFUSAL = re.compile(r"refus|denied|deny", re.IGNORECASE)
+RECEIVED_DOCS = ("README.md", "AGENTS.md", "docs/kit", ".claude/skills", "docs/templates")
+REFUSING_SCRIPTS = ("guard_bash.py", "review.py")
+
+
+def sentences(text: str) -> list[str]:
+    """The sentences of a Markdown file, each on one line: a hard-wrapped paragraph is joined."""
+    found: list[str] = []
+    for paragraph in re.split(r"\n\s*\n", text):
+        found += re.split(r"(?<=[.!?])\s+", " ".join(paragraph.split()))
+    return found
+
+
+def switch_instructions(text: str) -> list[str]:
+    """The sentences that name `git switch` or `git checkout` and do not say they are refused."""
+    return [s for s in sentences(text) if SWITCHING.search(s) and not REFUSAL.search(s)]
+
+
+def received_documents() -> list[Path]:
+    found: list[Path] = []
+    for place in RECEIVED_DOCS:
+        path = ROOT / place
+        found += sorted(path.rglob("*.md")) if path.is_dir() else [path]
+    return found
+
+
+def test_a_sentence_that_names_the_two_commands_must_say_they_are_refused() -> None:
+    assert switch_instructions("Run `git switch -c x`.") == ["Run `git switch -c x`."]
+    assert switch_instructions("The update runs:\n\n    git checkout -b y\n") == [
+        "git checkout -b y"
+    ]
+    assert switch_instructions("A session is refused `git switch` and\n`git checkout`.") == []
+    assert switch_instructions("`git switch` is denied.") == []
+
+
+def test_no_document_tells_a_session_to_switch_a_branch_or_says_worktrees_are_not_used() -> None:
+    told: list[str] = []
+    for path in received_documents():
+        text = path.read_text("utf-8")
+        told += [f"{path.relative_to(ROOT)}: {s}" for s in switch_instructions(text)]
+        for phrase in ("never git worktrees", "Separate clones", "Never git worktrees"):
+            if phrase in text:
+                told.append(f"{path.relative_to(ROOT)}: {phrase}")
+
+    assert told == []
+
+
+def denied_commands() -> list[str]:
+    """The commands of the `deny` rules of the settings, as a session would type them."""
+    settings = json.loads((ROOT / ".claude" / "settings.json").read_text("utf-8"))
+    rules: list[str] = settings["permissions"]["deny"]
+    return [
+        rule.removeprefix("Bash(").removesuffix(")").removesuffix(":*")
+        for rule in rules
+        if rule.startswith("Bash(")
+    ]
+
+
+def refused_advice(text: str, commands: list[str]) -> list[str]:
+    """The denied commands that `text` names, whatever else the sentence says about them: a
+    message that is itself a refusal is where such advice would sit. A command is not named by
+    a longer one that is allowed (`git push origin main-007-x` is not `git push origin main`)."""
+    return [command for command in commands if re.search(re.escape(command) + r"(?![\w-])", text)]
+
+
+def test_a_message_that_names_a_denied_command_is_found_whatever_its_sentence_says() -> None:
+    commands = denied_commands()
+    messages = [
+        "the tree is half updated: `git checkout -- . && git clean -fd` takes it back",
+        "the update was refused half way: `git checkout -- .` takes it back",
+        "the branch is behind: `git reset --hard origin/main` takes it back",
+        "the push was rejected: `git push --force` puts it there",
+        "the hook is red: `git commit --no-verify` goes round it",
+        "the label is missing: `gh pr edit --add-label gates-approved` adds it",
+        "to start over: `git switch -c main-007-x`",
+    ]
+
+    assert [bool(refused_advice(each, commands)) for each in messages] == [True] * len(messages)
+    assert (
+        refused_advice("push `git push origin main-007-x` and open the pull request", commands)
+        == []
+    )
+    assert refused_advice("`git push` from the tree, or put them on a branch", commands) == []
+
+
+def test_no_message_a_tool_of_the_kit_prints_tells_a_session_to_run_a_command_it_is_refused() -> (
+    None
+):
+    """A session that follows a message of a tool of the kit is refused its first command if the
+    message names one of the settings' denied commands. Every string a script prints is read, not
+    its docstrings; `guard_bash.py` and `review.py` are left out, as their strings are the refusals
+    and the list of commands a reviewer may not run."""
+    commands = denied_commands()
+    files = [ROOT / "kit.py"]
+    files += [f for f in sorted((ROOT / "scripts").glob("*.py")) if f.name not in REFUSING_SCRIPTS]
+    files += sorted((ROOT / ".claude" / "skills").glob("*/scripts/*.py"))
+    told: list[str] = []
+    for path in files:
+        tree = ast.parse(path.read_text("utf-8"))
+        docstrings = {
+            id(node.body[0].value)
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.body
+            and isinstance(node.body[0], ast.Expr)
+        }
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and id(node) not in docstrings
+            ):
+                told += [f"{path.name}: {c}" for c in refused_advice(node.value, commands)]
+
+    assert told == []
+
+
+def test_agents_md_says_a_brief_runs_in_its_own_tree_and_names_the_gate_file() -> None:
+    text = (ROOT / "AGENTS.md").read_text("utf-8")
+    agents = " ".join(text.split())
+    gate_files = next(b for b in re.split(r"\n- ", text) if b.startswith("Gate files"))
+
+    assert "its own tree" in agents
+    assert "make tree BRIEF=NNN" in agents
+    assert ".gitattributes" in gate_files

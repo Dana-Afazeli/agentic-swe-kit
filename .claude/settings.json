@@ -16,8 +16,6 @@
       "Bash(git pull)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git switch main-:*)",
-      "Bash(git switch -c main-:*)",
       "Bash(git push -u origin main-:*)",
       "Bash(git push origin main-:*)",
       "Bash(gh pr create --base main:*)",
@@ -39,6 +37,7 @@
       "Edit(/.pre-commit-config.yaml)",
       "Edit(/.python-version)",
       "Edit(/.gitignore)",
+      "Edit(/.gitattributes)",
       "Edit(/.betterleaks.toml)",
       "Edit(/.betterleaksignore)",
       "Edit(/GNUmakefile)",
@@ -66,6 +65,8 @@
       "Bash(git reset --hard:*)",
       "Bash(rm -rf ~:*)",
       "Bash(git commit --no-verify:*)",
+      "Bash(git switch:*)",
+      "Bash(git checkout:*)",
       "Bash(gh label:*)",
       "Bash(gh pr edit --add-label:*)",
       "Bash(gh pr edit --remove-label:*)"
@@ -82,6 +83,26 @@
           {
             "type": "command",
             "command": "uv run --project \"$CLAUDE_PROJECT_DIR\" python \"$CLAUDE_PROJECT_DIR/scripts/guard_bash.py\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$CLAUDE_PROJECT_DIR\" python \"$CLAUDE_PROJECT_DIR/scripts/session_lock.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$CLAUDE_PROJECT_DIR\" python \"$CLAUDE_PROJECT_DIR/scripts/session_lock.py\"",
+            "timeout": 30
           }
         ]
       }

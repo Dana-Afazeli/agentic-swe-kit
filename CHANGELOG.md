@@ -40,6 +40,26 @@ moves to.
   `tests/harness/test_stateless.py` renders the kit as a project and checks the ids, the paths and
   the dates.
 
+- Briefs run side by side, each in its own git worktree (ADR-0011, ported from the source project;
+  it supersedes ADR-0002 in part). `make tree BRIEF=NNN` (`BRANCH=<name>` for a branch by name,
+  `NEW=<name>` for a new one from the base) makes a tree beside the development checkout and syncs
+  it; `make untree` removes the folder and keeps the branch. A lock (`scripts/session_lock.py`, at
+  `SessionStart` and before every tool) refuses the editing tools of a second session in a tree that
+  another holds; it does not stop the shell. **A session can no longer switch branches:**
+  `git switch` and `git checkout` are deny rules, and the two allow rules for `git switch` are gone,
+  so a kit update's branch is made with `make tree NEW=<prefix>-kit-update`, and the update runs in
+  that tree; a project whose `Makefile` has no `tree` target yet makes the tree by hand with
+  `git worktree add -b <prefix>-kit-update ../<folder>-<prefix>-kit-update origin/<base>`.
+  **A project made from an earlier kit has the three empty rows of the old template in its own
+  `docs/BACKLOG.md`**: the new table check names them ("the same row") and its gate is red until
+  they are deleted, because the update never touches a project-owned file.
+  `.gitattributes` (kit-owned, a gate file) gives `docs/BACKLOG.md` and `docs/FRICTION.md`
+  `merge=union`, and `tests/harness/test_doc_tables.py` finds what a union merge can leave behind;
+  GitHub does not honour the attribute, so a branch merges the base and is pushed before
+  `gh pr ready`. The two log templates start with no row. A decision put to the maintainer is one
+  bullet per option, each with its To build and its To use, in the four skills that ask one.
+  `scripts/tree.py` has two knobs, the base branch and the branch prefix.
+
 ### Added
 - `kit.py` with `init` (render the placeholders in place, seed the project-owned files, remove the
   kit-only ones, write `kit.lock`, re-lock, run the gate; `--labels`, `--hooks`, `--no-sync`),

@@ -13,4 +13,3 @@ Kinds: `wrong` (shipped something incorrect) · `slow` (bottleneck) · `cost` (m
 
 | date | kind | what happened | what would have caught it | → outcome |
 |---|---|---|---|---|
-| | | | | |

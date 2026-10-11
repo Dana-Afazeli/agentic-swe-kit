@@ -37,15 +37,17 @@ the guard's tests ask every installed shell, so both zsh and bash are fine.
    fresh session: it interviews you and opens the first brief as a draft PR. From here on, every
    change is a PR.
 
-Checkouts: develop in one clone; if the project runs something, run it from a second clone pinned to
-the base branch. Never two Claude Code sessions in one folder (`WORKFLOW.md`, "One session per
-checkout"). Secrets live outside the repository (`~/.config/<name>/…`), never in it.
+Checkouts: develop in one clone, the development checkout, which stays on the base branch; run each
+brief in a tree of its own beside it (`make tree BRIEF=NNN`, then `claude` in the folder it prints);
+if the project runs something, run it from a second clone pinned to the base branch. One Claude Code
+session per tree (`WORKFLOW.md`, "One session per tree"). Secrets live outside the repository
+(`~/.config/<name>/…`), never in it.
 
 ## 3. Day to day
 
 - A unit of work starts as a brief in a draft PR (`/brief-writer`); the maintainer labels it
-  `brief-approved`; a fresh session runs `/implementer NNN`; the review loop runs; the maintainer
-  reads the page and merges. `WORKFLOW.md` has the loop. The roles are skills under
+  `brief-approved`; a fresh session in the brief's tree (`make tree BRIEF=NNN`) runs
+  `/implementer NNN`; the review loop runs; the maintainer reads the page and merges. `WORKFLOW.md` has the loop. The roles are skills under
   `.claude/skills/`: editing one changes how that role works, in this project and after an update.
 - `make check` is the gate; the Stop hook runs it. `make mutate` on `core/` changes. `make fmt`
   rewrites files on purpose; nothing else does.
@@ -81,10 +83,13 @@ Thresholds are starting points. Raise them from the friction log; never lower on
 ## 5. Taking a kit update
 
 ```sh
-git switch -c <prefix>-kit-update          # a branch; the update is a PR like any other
+make tree NEW=<prefix>-kit-update          # a branch in a tree of its own; the update is a PR like any other
+cd ../<this folder>-<prefix>-kit-update    # the update runs in that tree
 uv run python kit.py status                # your version, the newest tag, kit-owned files you changed
 uv run python kit.py update [--to vX.Y.Z]  # default: the newest tag
 ```
+A project whose `Makefile` has no `tree` target yet makes that tree by hand:
+`git worktree add -b <prefix>-kit-update ../<this folder>-<prefix>-kit-update origin/<base>`.
 `update` clones the kit, exports the version you have and the version you asked for, renders both
 with the answers in `kit.lock` — each by the rules of its own `kit.py` — and three-way merges every
 kit-owned file (`git merge-file`: base = the old kit rendered, yours = your file, theirs = the new

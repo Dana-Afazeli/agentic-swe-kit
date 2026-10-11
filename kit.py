@@ -196,6 +196,7 @@ KIT_OWNED = (
     "tests/prove/*",
     "AGENTS.md",
     ".gitignore",
+    ".gitattributes",
     ".python-version",
     "docs/kit/*",
     "docs/decisions/0000-TEMPLATE.md",
@@ -694,7 +695,7 @@ def labels_command(_args: argparse.Namespace) -> int:
 
 VERSION_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 HALF_UPDATED = (
-    "the tree is half updated; it was clean before: `git checkout -- . && git clean -fd` "
+    "the tree is half updated; it was clean before: `git restore . && git clean -fd` "
     "takes it back, then run update again"
 )
 

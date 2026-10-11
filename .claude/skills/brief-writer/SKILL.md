@@ -20,12 +20,9 @@ The steps are in order. A rule that someone can check starts with its id, in bol
 
 ## 1. Orient
 
-1. Work in a folder no other session uses. An implementer may be on a branch in the development
-   checkout, and a `git switch` there changes the files under its hands. Clone into your
-   scratchpad and write there (`<base>` is the base branch):
-   ```
-   git clone --quiet --branch <base> "$(git remote get-url origin)" <scratchpad>/bNNN
-   ```
+1. Work in a tree of your own, not in a folder an implementer may be using: a tree for a new
+   branch, and the session is started inside it. The branch is `<base>-NNN-slug`; if the slug changes while you
+   write, rename it with `git branch -m`. Nothing switches branches.
 2. **B-01** Note your session id now (`echo $CLAUDE_CODE_SESSION_ID`): the brief's last line is
    `Brief written in session <id>`. Whoever checks later whether the role's rules were kept
    finds your record by it, and so does anyone who wants to know why the brief says what it says.
@@ -49,7 +46,9 @@ The steps are in order. A rule that someone can check starts with its id, in bol
   specification. If you are unsure what it is, ask one question before you write about it: a
   brief about the wrong kind of thing is rewritten whole.
 - **B-03** Each decision is asked alone: the situation in plain words, the options and what each
-  costs to build and to whoever uses the result, your recommendation, the one word to reply.
+  costs to build and to whoever uses the result, your recommendation, the one word to reply. The
+  options are a list, one bullet per option, however few, each saying what it is **To build**
+  and what it is **To use**.
   `references/decisions.md` has one wrong and one right. The maintainer has no memory of what a
   session called "the second option"; a decision that leans on the conversation cannot be read
   the next day. And a cost has two sides: an option that is free to build can be the dear one
@@ -125,7 +124,7 @@ screen; say so when it is longer and why.
    it. Commit only the brief (`docs/briefs/NNN-slug.md`) on branch `<base>-NNN-slug`, and do not
    touch a label: `brief-approved` is how the maintainer says yes.
    ```
-   git switch -c <base>-NNN-slug && git add docs/briefs/NNN-slug.md && git commit -m "brief NNN: <what it is>"
+   git add docs/briefs/NNN-slug.md && git commit -m "brief NNN: <what it is>"
    git push -u origin <base>-NNN-slug
    gh pr create --base <base> --draft --title "Brief NNN: <slug in words>" --body-file <page file>
    ```

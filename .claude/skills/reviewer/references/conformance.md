@@ -60,6 +60,8 @@ head and base. If either is missing, say which and stop.
      choices") used without saying what the thing is;
    - a decision put to the maintainer that lacks its situation, its options with what each
      costs to build and to whoever uses the result, a recommendation, or the one word to reply;
+     or whose options run together in a sentence and are not one bullet each with its To build
+     and its To use;
    - a step for the maintainer that does not say what it unblocks;
    - the page telling its own history: an earlier draft, a correction, what was said in the
      session. The only "before" a page may speak of is the base branch.
@@ -68,7 +70,11 @@ head and base. If either is missing, say which and stop.
    and where it sits", "Next steps for the maintainer", "Decisions for the maintainer", "Not
    proven". Below it: "File by file", "Where this differs from the brief", "The review record",
    "Out of scope, noticed", "Docs made stale, and fixed", "Gate files changed", "Checks
-   weakened". The page is short so that the maintainer reads all of it.
+   weakened". Also this kind: the first item under "Next steps for the maintainer" does not say
+   where the review stands (`Review: remaining`, `Review: done` or `Review: stopped`), says
+   `done` while a reviewer's last verdict is not green, or says `remaining` after the loop has
+   closed. A `done` with threads still open is right when it names them. The page is short so
+   that the maintainer reads all of it.
 
 Not style, not naming, not other designs, not performance, not bugs you happen to see, not
 "consider adding". An unconstrained reviewer invents work. If you are unsure whether something is

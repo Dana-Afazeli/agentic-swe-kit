@@ -1,6 +1,6 @@
 # Brief NNN — <slug>
 
-**Run `/implementer NNN` in a fresh Claude Code session started in the development checkout.** You
+**Run `/implementer NNN` in a fresh Claude Code session started in this brief's own tree.** You
 need no context beyond this file and the repository; do not look for the planning conversation:
 there isn't one here, on purpose. This brief lives on branch `<base>-NNN-<slug>` as draft PR #<n>.
 Sessions: implementer <model / effort> · review: the `review-loop` skill, `--code <model/effort>`
