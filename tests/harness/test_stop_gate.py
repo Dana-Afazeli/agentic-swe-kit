@@ -14,6 +14,7 @@ from subprocess import CompletedProcess
 import pytest
 
 import stop_gate
+from conftest import REPO_ROOT
 
 ORIGIN_BASE = f"origin/{stop_gate.BASE_BRANCH}"
 
@@ -148,7 +149,9 @@ def test_a_green_gate_lets_the_session_stop_and_nothing_else_is_run(
     assert run.calls == [["make", "check"]]  # no integrity check, no `gh` for a label
 
 
-CI = stop_gate.ROOT / ".github" / "workflows" / "ci.yml"
+CI = (
+    REPO_ROOT / ".github" / "workflows" / "ci.yml"
+)  # not stop_gate.ROOT: mutmut's copy has no .github/
 
 
 def test_ci_still_holds_the_merge_for_a_weakened_test() -> None:
