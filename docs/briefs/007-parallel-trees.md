@@ -35,13 +35,15 @@ second clone made by hand. The source project changed this in its PR #17 (merge 
   what it is to use; four skills say so.
 
 The maintainer asked on 2026-10-11 for the same in the kit ("migrate that as well"), as one port.
-The source project is named in `docs/research/2026-10-08-role-skills-in-a-headless-run.md`; read
-its pull request through the GitHub API.
+The source project is the one this kit was extracted from;
+`docs/research/2026-10-08-role-skills-in-a-headless-run.md` names its repository. Its files are
+fetched through the GitHub API at `f70ffad` and copied.
 
 ## Objective
-The kit carries `make tree` and `make untree`, the session lock, the two deny rules, the union
-merge of the two logs with its table check, and the decision shape in the skills, each fitted to
-the kit: two branch knobs, an owner for every new file, nothing of the kit's history in what a
+The kit carries the source's code for `make tree` and `make untree`, the session lock, the two
+deny rules, the union merge of the two logs with its table check, and the decision shape in the
+skills: copied from the source's merge commit, not written again, and changed only where the kit
+differs: two branch knobs, an owner for every new file, nothing of the kit's history in what a
 project receives. Every document says that briefs run side by side, each in its own tree.
 
 ## Out of scope — do not do these
@@ -95,6 +97,14 @@ project receives. Every document says that briefs run side by side, each in its 
     Code 2.1.296).
 
 ## Interface
+- **Copied, not written again.** `scripts/tree.py`, `scripts/session_lock.py`, the four test
+  files, `.gitattributes`, the eight skill files and the two research notes are the source's files
+  at `f70ffad`, fetched and put in place. That code was reviewed for five rounds there, and a
+  second writing of it would start that over. A line differs from the source only where this
+  section says so: the two knobs, the lock's name, branch names in test data, where a test finds
+  the repository's root, and the words that brief 005's rule takes out (a decision-record id, a
+  date, the path of a research note, "(brief 009)"). Any other difference goes on the page under
+  "Where this differs from the brief".
 - `scripts/tree.py`: the source's, with `BASE_BRANCH = "main"  # knob: base` and
   `BRANCH_PREFIX = "main"  # knob: prefix` in place of `BASE`. `BRIEF=NNN` looks for
   `origin/<prefix>-NNN-*`; `NEW=<name>` starts at `origin/<base>`. The commands, the exit codes
@@ -128,7 +138,9 @@ project receives. Every document says that briefs run side by side, each in its 
    Counted as test functions (`grep -c '^def test_'`): 38 in `test_tree.py`, 34 in
    `test_session_lock.py`, 13 in `test_doc_tables.py`, 3 in `test_settings_rules.py`; pytest
    collects more, since some are parametrised. The proof lists both counts beside the source's; a
-   case that could not be ported is named on the page with the reason.
+   case that could not be ported is named on the page with the reason. The order of work: the
+   source's tests come first and are red because the script is not there; then the script is
+   copied.
 2. Two knobs. With `tree.BASE_BRANCH = "trunk"` and `tree.BRANCH_PREFIX = "unit"`, on a temporary
    repository whose bare origin holds `unit-009-x`: `tree --brief 009` makes the worktree on
    `unit-009-x` in `<checkout>-009`; `tree --new unit-010-y` makes a branch that starts at
@@ -181,6 +193,10 @@ the merge touches; `/clear` in a held tree, which waits for the lock to age.
   mode rejects.
 - The counts of criterion 1, by file, beside the source's.
 - For each of the eight skill files, `cmp` against the source's file at `f70ffad`: no output.
+- For `scripts/tree.py`, `scripts/session_lock.py` and each of the four test files, `diff`
+  against the source's file at `f70ffad`: the lines "Interface" names, and nothing else. (The
+  fetch of one file at that commit through the GitHub API was run on 2026-10-11 and gave the
+  file.)
 - The real thing once, in a fresh clone that stands in for the development checkout (`$W` is the
   work folder outside the repository, `$P` its proofs folder):
   ```
