@@ -1,7 +1,8 @@
 # Brief 006 — the adopter: a skill that brings an existing repository under the kit
 
-**Run `/implementer 006` in a fresh Claude Code session started in the development checkout.** You
-need no context beyond this file and the repository; do not look for the planning conversation:
+**Run `/implementer 006` in a fresh Claude Code session started in this brief's own tree**
+(`make tree BRIEF=006` in the development checkout; brief 007 brings the command). You need no
+context beyond this file and the repository; do not look for the planning conversation:
 there isn't one here, on purpose. This brief lives on branch `main-006-adopter-skill` as draft
 PR #6.
 Sessions: implementer opus / high · review: the `review-loop` skill, `--code opus/high`
@@ -9,11 +10,10 @@ Sessions: implementer opus / high · review: the `review-loop` skill, `--code op
 Labels this PR needs from the maintainer: `brief-approved` to start · `gates-approved` (`kit.py`:
 two manifest lines; `.claude/skills/adopter/**`: new files under a gate folder) ·
 `checks-weakened-approved` not expected: no test is removed or changed.
-Needs merged: PR 5 (brief 005). The skill copies from a render, and after PR 5 a render holds no
+Needs merged: PR 5 (brief 005) and PR 7 (brief 007), in that order. The skill copies from a render, and after PR 5 a render holds no
 record of the kit; PR 5 also numbers the roadmap's units. Once it is on `main`, bring this branch
 up to date (`git merge origin/main`) before the first test: the criteria use brief 005's fixture
-and manifest. Brief 007 (parallel trees) is built before this one: when it is on `main`, this
-session runs in the brief's own tree, as the implementer skill then says.
+and manifest. PR 7 brings `make tree`, and with it the tree this session starts in.
 Size: about 650 added lines — a skill of at most 200 lines, three reference files, one test
 module, a decision record. This brief is longer than one screen: it carries the rules the skill
 has to hold.
@@ -151,8 +151,8 @@ every file of a rendered project one of four classes, and a test keeps the table
       pull request come after the report. Answers given when the skill is started are not asked
       again; in a run with nobody to ask, what is still open is left out and listed, and the
       skill ends at the report.
-- `docs/decisions/0011-adoption-is-a-skill-an-agent-runs.md`: the maintainer's four decisions as
-  under "Context". Recorded as the planning session's choices, not the maintainer's: the skill is
+- A decision record under the next free number, "Adoption is a skill an agent runs": the
+  maintainer's four decisions as under "Context". Recorded as the planning session's choices, not the maintainer's: the skill is
   kit-only; the table is over a rendered project and has these four classes; rules 3 (a red check
   stays out), 5 and 11; `kit.py` and `kit.lock` are left out and the kit's commit stands in
   `docs/DELTAS.md`; the rehearsal's model and cap.
