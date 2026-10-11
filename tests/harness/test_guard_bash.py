@@ -1,4 +1,4 @@
-"""The Bash guard refuses the commands brief 002 names and lets everything else through."""
+"""The Bash guard refuses the commands it names and lets everything else through."""
 
 import io
 import json
@@ -40,7 +40,7 @@ EOF"""
 @pytest.mark.parametrize(
     "command",
     [
-        # brief 002, acceptance criterion 1
+        # the commands the guard lets through
         "rm -rf mutants",
         "rm -r .venv",
         "rm coverage.xml",
@@ -133,13 +133,13 @@ EOF"""
         "perl -MList::Util -e 'print 1' Makefile",
         "cd && make check",
         "bash docs/run.sh",
-        # -c belongs to the module being run, not to python (PR #5 review)
+        # -c belongs to the module being run, not to python
         "uv run python -m pytest -c pyproject.toml",
         "python -m pytest -c pyproject.toml tests",
         "python3 tools/report.py -c pyproject.toml",
         "python3 -Wonce docs/tool.py",
         # a here-document belongs to the command that reads it, not to a shell or python that
-        # happens to be on the same command line (PR #5 review, round 2)
+        # happens to be on the same command line
         "cat <<EOF > /tmp/notes.txt\nrm -rf ~/scratch\nEOF\nbash docs/run.sh",
         "git commit -F - <<EOF\nfix scripts/x.py\nEOF\nuv run python docs/tool.py",
         # pushes that stay on the feature branch
@@ -147,11 +147,10 @@ EOF"""
         "git push origin HEAD:main-002-harness",
         "git push origin v1.0.0",
         "git push origin HEAD:heads/main-002-harness",
-        # --force-if-includes forces nothing by itself (PR #5 review, round 4)
+        # --force-if-includes forces nothing by itself
         "git push --force-if-includes origin main-002-harness",
         "git push origin 'refs/heads/main-*:refs/heads/main-*'",
         # a cd inside ( … ) ends with the subshell; a `)` without a `(` is a case pattern
-        # (PR #5 review, round 3)
         "(cd docs && ls); rm -rf mutants",
         "case $x in a) true ;; esac; rm -rf mutants",
         "cd /tmp && echo x > /tmp/Makefile",
@@ -179,7 +178,7 @@ def test_allows(command: str) -> None:
 @pytest.mark.parametrize(
     ("command", "word"),
     [
-        # brief 002, acceptance criterion 2
+        # the commands the guard refuses
         ("rm -rf ~/scratch", "outside"),
         ("rm -rf /", "outside"),
         ("rm -r src/pkg", "tracked"),
@@ -317,7 +316,7 @@ def test_allows(command: str) -> None:
         ("git push --force-with-lease --force-if-includes origin main-002-harness", "force"),
         ("git push --force-with-lease=main-002-harness origin main-002-harness", "force"),
         ("git push --force-w origin main-002-harness", "force"),
-        # a push that lands on the base branch skips every gate (PR #5 review, round 2)
+        # a push that lands on the base branch skips every gate
         ("git push origin main", "merges"),
         ("git push -u origin main", "merges"),
         ("git push origin main-002-harness:main", "merges"),
@@ -347,7 +346,7 @@ def test_allows(command: str) -> None:
         ("gh pr create --base main --title x --label gates-approved", "the maintainer"),
         ("gh -R o/r pr edit 5 --add-label gates-approved", "the maintainer"),
         ("gh --repo o/r pr edit 5 --add-label gates-approved", "the maintainer"),
-        # an option with a value between `pr` and `edit` (PR #5 review)
+        # an option with a value between `pr` and `edit`
         ("gh pr -R o/r edit 5 --add-label gates-approved", "the maintainer"),
         ("gh pr --repo o/r edit 5 --remove-label gates-approved", "the maintainer"),
         ("gh issue -R o/r create --title x --label gates-approved", "the maintainer"),
@@ -573,8 +572,8 @@ CHARACTER_LINES = [
 ]
 
 
-# Claude Code runs the Bash tool through the user's shell: zsh on a Mac, bash on CI's runner
-# (PR #5 review, round 7). Each shell that is installed is asked; `zsh -f` reads no startup file.
+# Claude Code runs the Bash tool through the user's shell: zsh on a Mac, bash on CI's runner.
+# Each shell that is installed is asked; `zsh -f` reads no startup file.
 SHELLS = [shell for shell in (["bash", "-c"], ["zsh", "-f", "-c"]) if shutil.which(shell[0])]
 SHELL_NAMES = [shell[0] for shell in SHELLS]
 
@@ -605,8 +604,7 @@ def test_the_guard_loses_no_command_that_the_shell_runs(
     shell: list[str], line: str, tmp_path: Path
 ) -> None:
     """The guard and the shell must agree on where commands are: quoting, comments,
-    substitutions, here-documents, words in front of a command. Asked of the shells themselves
-    (PR #5 review, rounds 4 to 7)."""
+    substitutions, here-documents, words in front of a command. Asked of the shells themselves."""
     guard_refused = evaluate(line.replace("SLOT", "rm -rf ~/scratch"), CTX) is not None
 
     assert guard_refused or not shell_runs_the_slot(shell, line, tmp_path)
@@ -654,7 +652,7 @@ def test_a_brace_expansion_is_made_in_the_shells_order() -> None:
 
 def test_a_brace_expansion_is_never_made_large() -> None:
     """Eight groups of ten options are 10**8 words: a minute and gigabytes, in a hook that runs
-    before every Bash call — and a hook that is killed does not block (PR #5 review, round 8).
+    before every Bash call — and a hook that is killed does not block.
     Past a few dozen words the word is read as a glob instead: every group a `*`."""
     group = "{" + ",".join("abcdefghij") + "}"
     many = "Makefil" + group * 8

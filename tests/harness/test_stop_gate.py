@@ -1,8 +1,8 @@
 """The Stop hook blocks on a red `make check`, and only when code changed.
 
 It asks nothing else: a test that vanished is the CI job `integrity`'s to report, with the
-maintainer's label (`test_ci_still_holds_the_merge_for_a_weakened_test` is where that stays true;
-ADR-0008)."""
+maintainer's label (`test_ci_still_holds_the_merge_for_a_weakened_test` is where that stays
+true)."""
 
 import io
 import subprocess
@@ -30,11 +30,11 @@ ORIGIN_BASE = f"origin/{stop_gate.BASE_BRANCH}"
         (["uv.lock"], True),
         (["pyproject.toml"], True),
         ([".python-version"], True),
-        # a tool's own config file changes what `make check` checks (PR #5 review, round 4)
+        # a tool's own config file changes what `make check` checks
         (["pytest.ini"], True),
         (["docs/x.md", "pyrightconfig.json"], True),
         (["GNUmakefile"], True),
-        # pytest loads a conftest.py at the root (PR #5 review, round 8)
+        # pytest loads a conftest.py at the root
         (["conftest.py"], True),
         (["docs/conftest.py"], False),
         (["docs/ruff.toml"], False),
@@ -174,8 +174,8 @@ def test_a_reviewers_clone_is_not_gated(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The review launcher marks its processes: a reviewer changes nothing, and a red gate on the
-    PR under review is the author's to pass, not the reviewer's (PR 1 of the kit: both reviewers
-    ran to their time limits on the branch's own red, before this marker existed)."""
+    PR under review is the author's to pass, not the reviewer's (without the marker both reviewers
+    would run to their time limits on the branch's own red)."""
     changed_set(monkeypatch, "src/pkg/a.py")
     monkeypatch.setenv(stop_gate.REVIEWER_CLONE_VARIABLE, "1")
     run = Runner(make=(2, "would be red\n"))

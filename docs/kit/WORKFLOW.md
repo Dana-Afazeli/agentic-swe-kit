@@ -23,7 +23,7 @@ role needs and opens by sending a session to its skill; a rule that lives in a s
 a session that has not run it.
 
 **Checkouts.** Separate clones, never git worktrees: worktrees share `.git/hooks` and Claude Code's
-local settings with the main checkout, and both bit us. A *development checkout* is where briefs are
+local settings with the main checkout. A *development checkout* is where briefs are
 executed and where the git hooks are installed; a *deployment checkout* (if the project runs
 something) is pinned to the base branch and pulled after merges, never the development checkout, so a
 branch switch cannot change what is running. Paths in documents are examples; the repository assumes
@@ -52,7 +52,7 @@ reviewers' model and effort.
 4. **Implement** (`/implementer NNN`, a fresh session on the same branch): for each behaviour, failing
    test first → run it and show the failure → code → green → refactor. The Stop hook enforces `make check`; run
    `scripts/integrity.py --base origin/<base>` yourself before marking the PR ready (CI holds the
-   merge for a vanished test; the hook does not hold the session — ADR-0008). Read the PR's
+   merge for a vanished test; the hook does not hold the session). Read the PR's
    comments — top-level ones too — before each push and before marking it ready. The description is
    **the page** (`pr.py page`): at most 80 lines for the maintainer — what this is, the maintainer's
    steps, the decisions, what is not proven — then the reference parts the reviewers check; the proofs
@@ -90,8 +90,8 @@ reviewers' model and effort.
   by name — plus the unit's public interface (module, names, signatures). A criterion a trivial test
   could satisfy is not a criterion. The implementer writes these as failing tests first.
 - Proofs are named explicitly (what must be shown failing, what must be shown passing). Run each
-  planted proof against the tool once before the brief names it: two proofs in the first project
-  were wrong about the tool.
+  planted proof against the tool once before the brief names it: a proof that was not run may be
+  wrong about the tool.
 - The brief names model and effort for the implementer and for each reviewer, and a budget for the
   review (rounds; tool calls and minutes as a request).
 

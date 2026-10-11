@@ -8,8 +8,8 @@ What each piece of the harness does, where it runs, and how it was proven. The r
 
 ## 1. Toolchain
 
-Versions are pinned by `uv.lock`; `make install` refuses a stale lock. The ones the kit ships
-(2026-10-06): uv 0.11 · Python 3.13.12 · ruff 0.16 · basedpyright 1.40 · pytest 9.1 + pytest-asyncio
+Versions are pinned by `uv.lock`; `make install` refuses a stale lock. The ones the kit ships:
+uv 0.11 · Python 3.13.12 · ruff 0.16 · basedpyright 1.40 · pytest 9.1 + pytest-asyncio
 + pytest-cov · coverage 7.16 · hypothesis 6.168 · import-linter 2.15 · mutmut 3.8 · diff-cover 10.6
 · prek 0.5 · betterleaks 1.9.
 
@@ -61,7 +61,7 @@ keeps them in step.
 | mutation (changed `core/` modules) | 0 survivors unless `# pragma: no mutate` + reason (which needs the label) | — | — | ✓ (`make mutate` locally) | a test that calls the function and asserts nothing |
 | secret scan | none | — | ✓ | ✓ | a fake AWS key ID **with** a secret access key beside it |
 | gate-guard | label `gates-approved` present when gate files change; removed by a push that touches one | — | — | ✓ | a PR touching `Makefile` without the label |
-| test integrity | no test ID gone, no new skip/xfail, unless `checks-weakened-approved` | — (ADR-0008: the hook ran `integrity.py --tests-only` until then; the agent runs it before `gh pr ready`) | — | ✓ (job `integrity`) | delete a `def test_` → `integrity.py --base origin/<base>` lists the vanished ID; in a PR, CI red without the label |
+| test integrity | no test ID gone, no new skip/xfail, unless `checks-weakened-approved` | — (the agent runs `integrity.py` before `gh pr ready`) | — | ✓ (job `integrity`) | delete a `def test_` → `integrity.py --base origin/<base>` lists the vanished ID; in a PR, CI red without the label |
 | escape hatches | no added `# noqa`, `# ruff: disable`, `# type: ignore`, `# pyright: …`, `# pragma: no cover` / `no branch` / `no mutate`, `# fmt: off/skip`, `# isort: skip/off`, unless `checks-weakened-approved` | — | — | ✓ (job `integrity`) | `# noqa` on a line under `src/` |
 | the Bash guard | refuses: `rm` on a tracked path, `rm -r/-f` outside the repo and the temp directory, a shell write to a gate file, `git commit --no-verify`, a force-push, a push that lands on the base branch, a label change, `gh api` writes other than PR comments/reviews/thread resolution, `gh alias set` | PreToolUse on Bash | — | — (CI's `gate-guard` and `integrity` are the wall behind it) | `rm -rf ~/x` → exit 2; `rm -r mutants` → allowed |
 
@@ -114,7 +114,7 @@ the gate is worthless.
    `ci.yml`: keep them in step.
 4. `integrity`: `scripts/integrity.py --base "$BASE"`; red on a vanished test, a new skip, or a new
    escape hatch unless the PR carries `checks-weakened-approved`. This job alone holds the merge for
-   it: the Stop hook ran the test half too until ADR-0008.
+   it.
    If the comparison cannot be made, red regardless of the label.
 5. `gate-guard`: red when the PR touches a gate file and lacks `gates-approved`. The approval covers
    what was read: a push (`synchronize`) that touches a gate file the PR itself changes removes the
@@ -167,8 +167,7 @@ reviewed; `.claude/settings.local.json` stays gitignored for machine-only tweaks
   - `Stop` → `stop_gate.py` (timeout 180 s): exit 0 if nothing changed under `src/`, `tests/`,
     `scripts/` or in the gate's config files (working tree, or this branch against `origin/<base>`);
     else `make check`, and on failure exit 2 with the last 40 lines, else exit 0. It does not look at
-    vanished tests or at the label: it did until ADR-0008, and held every session on a branch that
-    removed a test on purpose, the reviewers' too; that check is CI's `integrity` job's alone. Any
+    vanished tests or at the label: that check is CI's `integrity` job's alone. Any
     failure inside the hook: it blocks (an uncaught exception would exit 1, which does not block).
     **No `stop_hook_active` bypass**: the CLI stops after eight consecutive blocks, and that is the
     only way out. One exemption: a reviewer process started by `scripts/review.py` carries
@@ -217,14 +216,24 @@ page; the conformance reviewer judges whether it reads cold (P-06) and whether t
 |---|---|---|---|
 | **kit-owned** | `kit.py` · `Makefile` · `.claude/**` · `.github/workflows/ci.yml` · `.pre-commit-config.yaml` · `scripts/**` · `tests/harness/**` · `tests/prove/**` · `AGENTS.md` · `.gitignore` · `.python-version` · `docs/kit/**` · `docs/decisions/0000-TEMPLATE.md` | three-way merge: base = the old kit rendered with your answers, ours = your file, theirs = the new kit rendered; conflicts stay as markers and are listed | add, don't edit: `project.mk`, `.github/workflows/project.yml`, `docs/DELTAS.md`, the "Project rules" section of `AGENTS.md`; added permission rules merge |
 | **mixed** | `pyproject.toml` (your dependencies, the kit's tool configuration) | three-way merge; the kit edits `[tool.*]`, you edit `[project]` and the dependency groups | edit freely; a collision is visible |
-| **project-owned** | `README.md` · `project.mk` · `src/<pkg>/**` · `tests/conftest.py` · `tests/test_*.py` · `docs/DELTAS.md` · `docs/ROADMAP.md` · `docs/FRICTION.md` · `docs/BACKLOG.md` · `docs/decisions/NNNN-*.md` · `docs/research/**` · `uv.lock` · `kit.lock` | never touched (`kit.lock` is rewritten; `uv.lock` is re-locked) | yours |
-| **kit-only** | the kit's `README.md`, `CHANGELOG.md`, `LICENSE` (copied to `docs/kit/LICENSE`), the kit's own decisions, briefs, friction log, backlog, roadmap, `docs/templates/**` | removed by `init`; never present in a project | — |
+| **project-owned** | `README.md` · `project.mk` · `src/<pkg>/**` · `tests/conftest.py` · `tests/test_*.py` · `docs/DELTAS.md` · `docs/ROADMAP.md` · `docs/FRICTION.md` · `docs/BACKLOG.md` · `docs/decisions/NNNN-*.md` · `docs/briefs/**` · `docs/research/**` · `uv.lock` · `kit.lock` | never touched (`kit.lock` is rewritten; `uv.lock` is re-locked) | yours |
+| **kit-only** | the kit's `README.md`, `CHANGELOG.md`, `LICENSE` (copied to `docs/kit/LICENSE`), the kit's own decisions, briefs, research notes, friction log, backlog, roadmap, its notes on maintaining itself, `docs/templates/**` | removed by `init`; never present in a project | — |
+
+`init` hands a project `docs/briefs/` and `docs/research/` as empty folders (a `.gitkeep` each,
+which is project-owned: `update` never adds or touches it, so a project that `init` made without
+them has the folders when it first holds a file there); nothing the kit wrote in them comes with
+it, and `update` never touches a project's own briefs and notes there. `init` runs once, in a fresh
+copy of the kit, and removes every kit-only file under those folders: a file committed there before
+`init` is removed with them. No file a project receives names a record id or the path of a
+decision record, a brief or a note of the kit, and none outside `tests/` and the lock files carries
+a date written year-month-day: `tests/harness/test_stateless.py` renders the kit as a project and
+scans it.
 
 The list lives in `kit.py` (`CATEGORIES`, `SEEDS`); `tests/harness/test_kit.py` checks that every
 tracked file of the kit has an owner and every pattern names a file. Two exceptions inside the
 categories: `kit.py` is copied **verbatim** (its constants are the kit's placeholders; rendering it
-would rewrite them), and `tests/harness/test_kit.py` is kit-only (it tests the kit's own tree). On
-`update`, each exported version is classified and rendered by its own `kit.py` — the target's runs
+would rewrite them), and the tests of the kit's own tree (`tests/harness/test_kit.py`,
+`test_no_leftovers.py` and `test_stateless.py`) are kit-only. On `update`, each exported version is classified and rendered by its own `kit.py` — the target's runs
 the update when it differs from the project's — and `kit.py` itself is merged like the rest.
 
 ## 10. Knobs — what `kit.py init` rewrites
