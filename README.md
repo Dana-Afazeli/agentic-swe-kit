@@ -26,7 +26,7 @@ run on every change to it. `CHANGELOG.md` says what changed between versions.
 6. **Maker ≠ checker.** Reviews run as separate processes on a named model and effort, in a
    throwaway clone; a finding is a hypothesis the implementer reproduces before changing anything.
 7. **Context is a budget.** One fresh session per brief; state lives in files and git; one session
-   per checkout; `AGENTS.md` stays under 85 lines: what every role needs, the rest in each role's skill.
+   per tree (a brief runs in its own git worktree); `AGENTS.md` stays under 85 lines: what every role needs, the rest in each role's skill.
 8. **Nets, not walls.** Each hook says what it stops and what gets through; CI and the human read
    are the wall.
 9. **Compound from real friction.** Every correction becomes a hook, a test, a rule or a skill —
@@ -58,7 +58,8 @@ installed by `uv` from `.python-version`. Nothing is installed globally.
 ## Taking a kit update
 
 ```sh
-git switch -c main-kit-update
+make tree NEW=main-kit-update        # a branch in a tree of its own; the update runs there
+cd ../<this folder>-main-kit-update
 uv run python kit.py update          # or: --to v0.3.0
 ```
 `update` fetches the kit, renders the old and the new version with your `kit.lock` answers, and
@@ -75,7 +76,8 @@ conflict markers that `update` lists. The result is a PR that touches gate files
 | `make check` | lint (ruff) · strict types (basedpyright) · import contracts (import-linter) · tests with branch coverage ≥ 90 % |
 | `make mutate` | mutation testing on the pure core (mutmut), gated: a surviving mutant fails |
 | `make prove` | every gate shown red on a planted defect, then green on the clean tree |
-| `.claude/settings.json` | allow/ask/deny rules and three hooks: a Bash guard (PreToolUse), a format hook (PostToolUse), a Stop gate that runs `make check` |
+| `make tree` · `make untree` | a git worktree for a brief beside the development checkout, so briefs are built side by side, each with its own branch and gate |
+| `.claude/settings.json` | allow/ask/deny rules and four hooks: a Bash guard (PreToolUse), a session lock (SessionStart, PreToolUse), a format hook (PostToolUse), a Stop gate that runs `make check` |
 | `scripts/` | the hooks, `integrity.py`, `mutation_gate.py`, and `review.py`, which starts the two PR reviewers as headless processes |
 | `.claude/skills/` | the three roles as skills — `brief-writer`, `implementer`, `reviewer` — with numbered rules, their templates (the brief, the page) and `pr.py`; and `review-loop`, which starts the reviewers |
 | `.github/workflows/ci.yml` | jobs `check`, `mutation`, `secrets`, `integrity`, `gate-guard`, `prove` |

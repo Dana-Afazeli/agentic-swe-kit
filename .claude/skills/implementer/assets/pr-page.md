@@ -13,10 +13,14 @@ Brief: [`docs/briefs/NNN-slug.md`](docs/briefs/NNN-slug.md)
 - [ ]
 
 ## Decisions for the maintainer
-<!-- "None." or one block per decision, each readable on its own: the situation in plain words ·
-     the options and what each costs to build and to whoever uses the result · your
-     recommendation · the one word to reply. Name the command or the run that checked each fact
-     the decision rests on. -->
+<!-- "None." or one block per decision, each readable on its own, in this shape:
+     **The question, as a question.** The situation in plain words, and the command or the run
+     that checked each fact it rests on; then the options and what each costs to build and to
+     whoever uses the result, as follows.
+     - `option` — To build: what it takes. To use: what the person using the result sees, waits
+       for or has to do.
+     (one bullet per option, however few, each with both costs; never the options in a sentence)
+     Recommendation `option`, and why. Reply `option` or `option`. -->
 
 ## Not proven
 <!-- What the tests cannot show, and what would show it: where the maintainer can check by hand,

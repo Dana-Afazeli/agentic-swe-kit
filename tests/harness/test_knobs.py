@@ -36,6 +36,7 @@ def rules(root: Path, kind: str) -> list[str]:
 def check_base(root: Path) -> None:
     base = knob(root, "scripts/stop_gate.py", "base")
     assert knob(root, "scripts/guard_bash.py", "base") == base
+    assert knob(root, "scripts/tree.py", "base") == base
     ci = (root / ".github/workflows/ci.yml").read_text("utf-8")
     # quoted, so that YAML reads a branch named `1.10` or `true` as a string
     assert re.findall(r'branches: \["([^"\]]+)"\] # knob: base', ci) == [base, base]
@@ -51,13 +52,18 @@ def check_base(root: Path) -> None:
 
 def check_prefix(root: Path) -> None:
     prefix = knob(root, "scripts/review.py", "prefix")
+    assert knob(root, "scripts/tree.py", "prefix") == prefix
     for allowed in (
-        f"git switch {prefix}-:*",
-        f"git switch -c {prefix}-:*",
         f"git push -u origin {prefix}-:*",
         f"git push origin {prefix}-:*",
     ):
         assert f"Bash({allowed})" in rules(root, "allow")
+    # a brief runs in a tree of its own, which keeps its branch: both commands are refused, and no
+    # allow rule is left that would name one of them
+    for denied in ("git switch:*", "git checkout:*"):
+        assert f"Bash({denied})" in rules(root, "deny")
+    switching = ("Bash(git switch", "Bash(git checkout")
+    assert [rule for rule in rules(root, "allow") if rule.startswith(switching)] == []
     # the skills say `<base>-NNN-slug`; AGENTS.md's Roles section is where the prefix is written
     assert f"`{prefix}-NNN-slug`" in (root / "AGENTS.md").read_text("utf-8")
 

@@ -196,6 +196,7 @@ KIT_OWNED = (
     "tests/prove/*",
     "AGENTS.md",
     ".gitignore",
+    ".gitattributes",
     ".python-version",
     "docs/kit/*",
     "docs/decisions/0000-TEMPLATE.md",

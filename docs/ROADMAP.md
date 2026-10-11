@@ -42,12 +42,22 @@ ship empty; no shipped file names a record id or the path of a record of the kit
 `tests/` and the lock files carries a date written year-month-day (ADR-0010).
 Exit: a rendered project holds none of the kit's records, and a kit-only test keeps it so.
 
-## 3. `make prove` (brief 007)
+## 2d. Parallel trees (brief 007) — PR open 2026-10-11
+`make tree BRIEF=NNN` makes a git worktree for a brief beside the development checkout and `make
+untree` removes it; a session lock refuses the editing tools of a second session in a tree; `git
+switch` and `git checkout` are denied; the two logs merge by union and a test finds what a union
+merge leaves behind; a decision put to the maintainer is one bullet per option, each with its To
+build and its To use. Ported from the source project's change of the same name, with the kit's two
+branch knobs (ADR-0011).
+Exit: two briefs can be built at the same time, each in its own folder, and `make tree` is all it
+takes to start the second.
+
+## 3. `make prove` (brief 008)
 `tests/prove/`: a session fixture clones the committed tree, each proof plants one defect and shows
 its gate red, then the clean tree is green; CI job `prove`.
 Exit: HARNESS.md's gates table has a proof per row, and the proofs run on every PR.
 
-## 4. Rehearsal (brief 008)
+## 4. Rehearsal (brief 009)
 "Use this template" into a private throwaway repository; `init`; `make check`; `make prove`; a PR
 there shows the CI jobs and `gate-guard`; a fresh session there loads `AGENTS.md` and is held by the
 hooks; then an `update` across two kit refs, once clean and once with a collision. What breaks is

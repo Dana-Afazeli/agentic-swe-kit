@@ -81,6 +81,7 @@ GATE_FILES = CONFIG_OVERRIDES | {
     ".pre-commit-config.yaml",
     ".python-version",
     ".gitignore",
+    ".gitattributes",  # how git merges the two logs
     "uv.lock",
     ".betterleaks.toml",
     ".betterleaksignore",

@@ -52,6 +52,18 @@ def test_the_ask_rules_name_the_guards_gate_files() -> None:
     assert asked == GUARD
 
 
+def test_gitattributes_is_a_gate_file_in_all_three_lists() -> None:
+    """`.gitattributes` decides how git merges the two logs: a change to it changes what every
+    merge does, so it needs `gates-approved` like the files that configure the gate."""
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text("utf-8")
+    patterns = re.findall(r"^\s+GATE_FILES: '\^\((.+)\)'$", workflow, flags=re.MULTILINE)
+    settings = json.loads((ROOT / ".claude" / "settings.json").read_text("utf-8"))
+
+    assert ".gitattributes" in guard_bash.GATE_FILES
+    assert r"\.gitattributes$" in patterns[0].split("|")
+    assert "Edit(/.gitattributes)" in settings["permissions"]["ask"]
+
+
 def test_a_tools_own_config_file_is_a_gate_file() -> None:
     """Each of these is read before, or instead of, `pyproject.toml` or the `Makefile` by a tool
     `make check` runs. Not on the gate list, one of them lowers a threshold with no label asked for.

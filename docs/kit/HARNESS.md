@@ -41,7 +41,18 @@ uv 0.11 · Python 3.13.12 · ruff 0.16 · basedpyright 1.40 · pytest 9.1 + pyte
 | **`check`** | `lint` + `types` + `arch` + `cov` — **the gate** | < 60 s, or split fast/slow |
 | `mutate` | clean `mutants/` → `mutmut run` (+ `MUTANTS=` filter) → `export-cicd-stats` → `scripts/mutation_gate.py` | min |
 | `prove` | every gate shown red on a planted defect in a throwaway clone, then green (`tests/prove/`, marker `prove`) | min |
+| `tree` | `scripts/tree.py tree`: a git worktree beside the development checkout, then `uv sync --locked --all-groups` there; one of `BRIEF=NNN` (the one branch `origin/<prefix>-NNN-*`), `BRANCH=<name>`, `NEW=<name>` (a new branch from `origin/<base>`) | s |
+| `untree` | `scripts/tree.py untree`: removes the folder and keeps the branch; one of `BRIEF=NNN`, `BRANCH=<name>` | s |
 | `help` | lists targets with their `##` comments, project ones included | — |
+
+`tree` is run from the development checkout, never from a tree, and ends with the line that starts a
+session in the new folder. It exits 0 when done, 2 when it refused (with a message that says what to
+do) and 1 when the tree was made and its sync failed. It refuses: no branch, or more than one, for
+the number; a folder that exists; a tree that git lists and whose folder is gone (`git worktree
+prune`); a branch another tree holds; a git call that does not answer in five minutes; and, for
+`untree`, a tree with an uncommitted or untracked file, an ignored file that no tool makes again
+(`.env`, a local settings file) or commits that are on no branch of `origin`. `BRANCH=` and `NEW=`
+take one path segment, so a branch prefix with a `/` is found by `BRIEF=` and cannot be named there.
 
 Project-owned targets (`run`, `eval`, deploy, …) live in `project.mk`, which the Makefile includes
 and a kit update never touches. The marker expression in `test` and `cov` is the gate's definition of
@@ -144,13 +155,14 @@ facts and state · models and cost · project rules. Everything above "Project r
 **`.claude/settings.json`** (committed; the dev-session allowlist belongs in the repo, versioned and
 reviewed; `.claude/settings.local.json` stays gitignored for machine-only tweaks):
 - allow: `make`, `uv run|sync|add|lock|python`, read-only git, `git fetch|pull|add|commit`, `git
-  switch [-c] <prefix>-*`, `git push [-u] origin <prefix>-*`, `gh pr create --base <base>`, `gh pr
-  view|checks|ready|diff`, `gh run view`.
+  push [-u] origin <prefix>-*`, `gh pr create --base <base>`, `gh pr view|checks|ready|diff`,
+  `gh run view`. `git switch` and `git checkout` are denied (below), so a tree keeps its branch.
 - ask: `gh pr merge`, and an `Edit(...)` rule for every gate file. Only `Edit(path)` rules are matched
   for files, and they cover every editing tool (`Write(path)` rules match nothing).
 - deny: force-push, the plain spellings of a push to the base branch, `git reset --hard`, `git commit
-  --no-verify`, `gh label`, `gh pr edit --add-label|--remove-label`, `rm -rf ~…`. A deny rule matches
-  a spelling; the Bash guard catches the flag wherever it sits. Beware a prefix deny that also covers
+  --no-verify`, `git switch`, `git checkout`, `gh label`, `gh pr edit --add-label|--remove-label`,
+  `rm -rf ~…`. A deny rule matches a spelling (`git -C . switch` runs past the two that keep a tree
+  on its branch); the Bash guard catches the flag wherever it sits. Beware a prefix deny that also covers
   the unit branches: a deny written `Bash(git push origin <base>:*)` also refuses a push of
   `<prefix>-001-slug` whenever the prefix starts with the base's name, as the kit's default does.
 - env: `CLAUDE_CODE_SUBAGENT_MODEL` = Sonnet (built-in subagents; a spawn that names a model wins).
@@ -162,6 +174,19 @@ reviewed; `.claude/settings.local.json` stays gitignored for machine-only tweaks
     a substitution is judged as a command line of its own; what cannot be read that way is refused.
     The shell is the user's — zsh on a Mac, bash on CI — and the guard's tests ask each installed
     shell whether they agree. If the guard itself fails, the command is refused.
+  - `SessionStart`, and `PreToolUse` before every tool → `session_lock.py` (timeout 30 s): one
+    session at a time may edit in a tree. The lock is the file `kit-session.lock` in the tree's own
+    git directory (`git rev-parse --git-dir`; each worktree has one, outside its working tree), with
+    the session's id and when it was last seen. At `SessionStart` it takes the lock, or adds a note
+    to the session's context in a tree another session holds (a `SessionStart` hook cannot refuse a
+    session). Before `Edit`, `Write` and `NotebookEdit` it refuses a second session (exit 2, naming
+    the holder and `make tree`); an editing tool that names a file outside the tree is not an edit
+    in it. Before any other tool it refreshes the holder's time and never refuses, so a session that
+    works in its shell for half an hour keeps its tree. A lock not seen for 30 minutes is free, and
+    one that cannot be read is free. It stops the editing tools, not the shell; it belongs to the
+    tree the session was started in, not to the file it edits; and a failure of the hook exits 1,
+    which does not block. A new session in a held tree waits for the lock to age, or for the file to
+    be deleted by hand.
   - `PostToolUse` on `Edit|Write` → `fmt_hook.py`: `ruff format` only, on the edited `.py` (an autofix
     would delete an import added in one edit and used in the next). Never blocks.
   - `Stop` → `stop_gate.py` (timeout 180 s): exit 0 if nothing changed under `src/`, `tests/`,
@@ -214,7 +239,7 @@ page; the conformance reviewer judges whether it reads cold (P-06) and whether t
 
 | Owner | Files | On `kit.py update` | How a project extends it |
 |---|---|---|---|
-| **kit-owned** | `kit.py` · `Makefile` · `.claude/**` · `.github/workflows/ci.yml` · `.pre-commit-config.yaml` · `scripts/**` · `tests/harness/**` · `tests/prove/**` · `AGENTS.md` · `.gitignore` · `.python-version` · `docs/kit/**` · `docs/decisions/0000-TEMPLATE.md` | three-way merge: base = the old kit rendered with your answers, ours = your file, theirs = the new kit rendered; conflicts stay as markers and are listed | add, don't edit: `project.mk`, `.github/workflows/project.yml`, `docs/DELTAS.md`, the "Project rules" section of `AGENTS.md`; added permission rules merge |
+| **kit-owned** | `kit.py` · `Makefile` · `.claude/**` · `.github/workflows/ci.yml` · `.pre-commit-config.yaml` · `scripts/**` · `tests/harness/**` · `tests/prove/**` · `AGENTS.md` · `.gitignore` · `.gitattributes` · `.python-version` · `docs/kit/**` · `docs/decisions/0000-TEMPLATE.md` | three-way merge: base = the old kit rendered with your answers, ours = your file, theirs = the new kit rendered; conflicts stay as markers and are listed | add, don't edit: `project.mk`, `.github/workflows/project.yml`, `docs/DELTAS.md`, the "Project rules" section of `AGENTS.md`; added permission rules merge |
 | **mixed** | `pyproject.toml` (your dependencies, the kit's tool configuration) | three-way merge; the kit edits `[tool.*]`, you edit `[project]` and the dependency groups | edit freely; a collision is visible |
 | **project-owned** | `README.md` · `project.mk` · `src/<pkg>/**` · `tests/conftest.py` · `tests/test_*.py` · `docs/DELTAS.md` · `docs/ROADMAP.md` · `docs/FRICTION.md` · `docs/BACKLOG.md` · `docs/decisions/NNNN-*.md` · `docs/briefs/**` · `docs/research/**` · `uv.lock` · `kit.lock` | never touched (`kit.lock` is rewritten; `uv.lock` is re-locked) | yours |
 | **kit-only** | the kit's `README.md`, `CHANGELOG.md`, `LICENSE` (copied to `docs/kit/LICENSE`), the kit's own decisions, briefs, research notes, friction log, backlog, roadmap, its notes on maintaining itself, `docs/templates/**` | removed by `init`; never present in a project | — |
@@ -241,8 +266,8 @@ the update when it differs from the project's — and `kit.py` itself is merged 
 | Knob | Kit value | Flag | Where |
 |---|---|---|---|
 | package | `kitpkg` | `--package` | `src/<pkg>/`; `pyproject.toml` (`name`, hatch path, coverage source, contract modules, mutmut paths); `ci.yml` mutation path; `review.py` work dir; `project.mk`; tests |
-| base branch | main (the kit's default) | `--base` | the `# knob: base` lines of `stop_gate.py`, `guard_bash.py` and `ci.yml`; `settings.json` rules; `AGENTS.md` and the documents (`` `main` ``, `origin/main`, `HEAD:main`); the skills say `<base>` and are not rendered — in a `.py` file only the knob line changes |
-| branch prefix | = base | `--branch-prefix` | the `# knob: prefix` line of `review.py`; `settings.json` rules; `AGENTS.md` (the Roles line) and the documents (`main-NNN-`, `main-:*`) — in a `.py` file only the knob line changes |
+| base branch | main (the kit's default) | `--base` | the `# knob: base` lines of `stop_gate.py`, `guard_bash.py`, `tree.py` and `ci.yml`; `settings.json` rules; `AGENTS.md` and the documents (`` `main` ``, `origin/main`, `HEAD:main`); the skills say `<base>` and are not rendered — in a `.py` file only the knob line changes |
+| branch prefix | = base | `--branch-prefix` | the `# knob: prefix` lines of `review.py` and `tree.py`; `settings.json` rules; `AGENTS.md` (the Roles line) and the documents (`main-NNN-`, `main-:*`) — in a `.py` file only the knob line changes |
 | maintainer | `the maintainer` | `--maintainer` | `AGENTS.md` and the documents — never a `.py` file (hook messages keep the role phrase, so a rename cannot change how code is formatted), never a skill (skills say `the maintainer`; in backticks the phrase is the term, not the person, and stays — `AGENTS.md`'s Roles line says who) |
 | python | `3.13.12` | `--python` | `.python-version`, `requires-python`, basedpyright `pythonVersion` |
 

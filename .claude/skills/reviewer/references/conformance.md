@@ -60,6 +60,8 @@ head and base. If either is missing, say which and stop.
      choices") used without saying what the thing is;
    - a decision put to the maintainer that lacks its situation, its options with what each
      costs to build and to whoever uses the result, a recommendation, or the one word to reply;
+     or whose options run together in a sentence and are not one bullet each with its To build
+     and its To use;
    - a step for the maintainer that does not say what it unblocks;
    - the page telling its own history: an earlier draft, a correction, what was said in the
      session. The only "before" a page may speak of is the base branch.

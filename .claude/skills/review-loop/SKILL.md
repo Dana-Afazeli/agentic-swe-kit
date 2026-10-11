@@ -111,7 +111,8 @@ by reflex.
    - **reject with evidence**: say what you ran and what it showed;
    - **park**: true, out of scope: one line in `docs/BACKLOG.md`;
    - **the maintainer's decision**: a rule would have to change: put it on the page under
-     "Decisions for the maintainer", standing alone, with the options and your recommendation.
+     "Decisions for the maintainer", standing alone, in the shape of I-12: one bullet per
+     option, each with its To build and its To use, and your recommendation.
 3. If a finding is partly right, fix that part and say which part you did not take.
 
 ## 3. Fix with TDD, and check what the fix costs elsewhere

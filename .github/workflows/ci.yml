@@ -181,7 +181,7 @@ jobs:
           # Keep in step with GATE_FILES and GATE_DIRS in scripts/guard_bash.py.
           # From GNUmakefile to uv.toml: a tool's own config file, which that tool reads before
           # pyproject.toml or the Makefile (CONFIG_OVERRIDES there).
-          GATE_FILES: '^(Makefile$|pyproject\.toml$|uv\.lock$|\.pre-commit-config\.yaml$|\.python-version$|\.gitignore$|\.betterleaks\.toml$|\.betterleaksignore$|kit\.py$|GNUmakefile$|makefile$|pytest\.toml$|\.pytest\.toml$|pytest\.ini$|\.pytest\.ini$|ruff\.toml$|\.ruff\.toml$|pyrightconfig\.json$|\.coveragerc$|\.coveragerc\.toml$|\.importlinter$|setup\.cfg$|tox\.ini$|uv\.toml$|\.claude/|\.github/|scripts/)'
+          GATE_FILES: '^(Makefile$|pyproject\.toml$|uv\.lock$|\.pre-commit-config\.yaml$|\.python-version$|\.gitignore$|\.gitattributes$|\.betterleaks\.toml$|\.betterleaksignore$|kit\.py$|GNUmakefile$|makefile$|pytest\.toml$|\.pytest\.toml$|pytest\.ini$|\.pytest\.ini$|ruff\.toml$|\.ruff\.toml$|pyrightconfig\.json$|\.coveragerc$|\.coveragerc\.toml$|\.importlinter$|setup\.cfg$|tox\.ini$|uv\.toml$|\.claude/|\.github/|scripts/)'
         run: |
           labels_url="repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels"
 

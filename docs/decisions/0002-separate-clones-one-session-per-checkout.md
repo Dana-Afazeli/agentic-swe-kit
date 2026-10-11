@@ -1,7 +1,9 @@
 # ADR-0002 — Separate clones, not worktrees; one Claude Code session per checkout
 
 **Status:** accepted 2026-10-06 (adopted from the source project's ADR-0004 of 2026-09-30 and its
-rule of 2026-10-02) · **Deciders:** the maintainer
+rule of 2026-10-02) · **Deciders:** the maintainer ·
+**Superseded in part by ADR-0011:** briefs run in git worktrees of the development checkout, one
+session per tree.
 
 ## Context
 A project often needs the repository in more than one place at once: a development checkout where

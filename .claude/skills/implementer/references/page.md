@@ -36,14 +36,17 @@ The situation: a held reminder lives in memory until 07:00. If the service is re
 night, the reminder is lost and nothing arrives in the morning. I checked this by stopping the
 service at 23:30 with one reminder held (`quiet_restart.txt` in the proofs comment): after the
 restart, nothing was sent at 07:00.
-- **keep**: leave it as it is. To build: nothing. What a user notices: after a night restart,
-  the reminders that were waiting never arrive, and nothing tells them so.
-- **file**: write held reminders to a file in the state directory and read it at start. To
-  build: about 60 lines and two tests in this pull request. What a user notices: nothing; a
-  restart loses no reminder.
-- **later**: the same as "file", as a line in `docs/BACKLOG.md` for the unit that makes the
-  queue survive a restart. To build: nothing now. What a user notices: the same as with "keep"
-  until that unit is merged.
+- **keep** — leave it as it is.
+  - To build: nothing.
+  - To use: after a night restart, the reminders that were waiting never arrive, and nothing
+    tells them so.
+- **file** — write held reminders to a file in the state directory and read it at start.
+  - To build: about 60 lines and two tests in this pull request.
+  - To use: nothing to notice; a restart loses no reminder.
+- **later** — the same as "file", as a line in `docs/BACKLOG.md` for the unit that makes the
+  queue survive a restart.
+  - To build: nothing now.
+  - To use: the same as with "keep" until that unit is merged.
 
 I recommend **later**: that unit has to store the queue anyway, and two formats for one state
 directory is a cost of its own. Reply `keep`, `file` or `later`.
@@ -93,9 +96,12 @@ None. The integrity script, run against the base branch, prints nothing.
 session can read it.
 
 - Wrong: `- [ ] Decide on finding 4 (the residual window): see the thread.`
-- Right: the block under "Decisions for the maintainer" above. It gives the situation, each
-  option with what it takes to build and what a user notices of it, a recommendation, the word
+- Right: the block under "Decisions for the maintainer" above. It gives the situation, one
+  bullet per option with what it is To build and what it is To use, a recommendation, the word
   to reply, and the run that checked the fact.
+- Also wrong: the same options in one paragraph ("`rule`: … `files`: …"), or an option that
+  lists what it gives and not what it costs. Each option is its own bullet, with both costs,
+  also when there are only two.
 
 **A page that tells its own history.** The reader never saw the earlier draft or the
 conversation, so a sentence that answers them answers nobody.

@@ -3,7 +3,8 @@
 The maintainer decides too many things to remember any of them, and reads your question with no
 memory of the conversation around it. So each decision is asked alone, and carries everything
 needed to answer it: the situation in plain words, the options and what each costs to build and
-to whoever uses the result, your recommendation, and the one word to reply.
+to whoever uses the result, your recommendation, and the one word to reply. The options are a
+list: one bullet per option, however few, each with its **To build** and its **To use**.
 
 The example is invented: a service that sends reminders.
 
@@ -31,14 +32,17 @@ One of the three, asked on its own:
 > reminder was sent 240 times once it came back (counted in the log of that day:
 > `grep -c "retry id=4711" service.log` prints 240).
 >
-> - **cap**: at most five tries, then the reminder is marked failed. To build: about 10 lines.
->   What a user notices: after two and a half minutes of outage the reminder never arrives; it
->   shows as failed in their list, and they have to send it again by hand.
-> - **back off**: the wait doubles after each try, up to an hour, with no cap. To build: about
->   20 lines. What a user notices: nothing is lost, and after a long outage a reminder can
->   arrive up to an hour after the delivery service is back.
-> - **keep**: every 30 seconds, for ever. To build: nothing. What a user notices: at the next
->   outage, the same reminder 240 times in a row.
+> - **cap** — at most five tries, then the reminder is marked failed.
+>   - To build: about 10 lines.
+>   - To use: after two and a half minutes of outage the reminder never arrives; it shows as
+>     failed in their list, and they have to send it again by hand.
+> - **back off** — the wait doubles after each try, up to an hour, with no cap.
+>   - To build: about 20 lines.
+>   - To use: nothing is lost, and after a long outage a reminder can arrive up to an hour
+>     after the delivery service is back.
+> - **keep** — every 30 seconds, for ever.
+>   - To build: nothing.
+>   - To use: at the next outage, the same reminder 240 times in a row.
 >
 > I recommend **back off**: nothing is lost, and the flood cannot happen. Reply `cap`,
 > `back off` or `keep`.

@@ -208,7 +208,7 @@ def test_agents_md_keeps_what_every_role_needs() -> None:
         "scope-approved",
         "Secrets never enter the repo",
         "docs/research/",
-        "One session per checkout",
+        "One session per tree",
         "make eval",
         "No global installs",
         "## Project rules",
@@ -388,3 +388,32 @@ def test_work_beyond_the_brief_is_approved_by_a_label_that_both_roles_know() -> 
     assert "words" in differs
     assert label in differs
     assert label in flat(ROOT / "AGENTS.md")
+
+
+# --- how a decision is put to the maintainer ------------------------------------------------------
+
+
+def test_a_decision_is_a_list_with_one_bullet_per_option_and_each_has_both_costs() -> None:
+    """A decision put to the maintainer is not a paragraph: one bullet per option, however few,
+    each saying what it is "To build" and what it is "To use". Each role that asks one says so in
+    its own skill, with the same two labels, and the template and the example show them."""
+    shape = ("one bullet per option", "To build", "To use")
+
+    def flat(*parts: str) -> str:
+        return " ".join((SKILLS.joinpath(*parts)).read_text("utf-8").split())
+
+    places = {
+        "implementer SKILL": flat("implementer", "SKILL.md"),
+        "implementer template": flat("implementer", "assets", "pr-page.md"),
+        "implementer example": flat("implementer", "references", "page.md"),
+        "brief-writer SKILL": flat("brief-writer", "SKILL.md"),
+        "brief-writer example": flat("brief-writer", "references", "decisions.md"),
+        "review-loop SKILL": flat("review-loop", "SKILL.md"),
+    }
+
+    missing = [
+        (place, phrase) for place, text in places.items() for phrase in shape if phrase not in text
+    ]
+    assert missing == []
+    # one pair of labels: the older wording of the second one is gone
+    assert not [place for place, text in places.items() if "What a user notices" in text]

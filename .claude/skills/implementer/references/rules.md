@@ -20,7 +20,7 @@ fails when this table and the text disagree.
 | I-09 | proofs word for word from saved files, cuts marked, in one PR comment, none in the description | PR |
 | I-10 | the description is the page | PR |
 | I-11 | the page is rebuilt at each push that changes the diff | PR |
-| I-12 | a decision names the run that checked its facts, and keeps the maintainer's words apart from the session's | judgment |
+| I-12 | a decision is one bullet per option, each with its To build and To use; it names the run that checked its facts, and keeps the maintainer's words apart from the session's | judgment |
 | I-13 | every comment on the PR is read before each push and before `gh pr ready` | transcript |
 | I-14 | fix the kind, not the case; a third round on one kind goes to the maintainer | judgment |
 | I-15 | a finding is reproduced before anything changes | transcript |

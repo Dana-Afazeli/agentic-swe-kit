@@ -9,7 +9,7 @@ someone looks to see whether a session kept the rule: `transcript` (the session'
 |---|---|---|
 | B-01 | the brief's last line is `Brief written in session <id>` | git |
 | B-02 | reads the plan, the friction log, the last PR, the ADRs and the open PRs first, and again before reporting a state | transcript |
-| B-03 | each decision is asked alone: situation, options with their cost to build and to whoever uses the result, a recommendation | transcript |
+| B-03 | each decision is asked alone: situation, one bullet per option with its To build and To use, a recommendation | transcript |
 | B-04 | a brief holds work of one kind, at most about 1,000 added lines of code and tests | PR |
 | B-05 | a fact about a tool is run or quoted that day, and the brief says how; what was not checked is named | judgment |
 | B-06 | every proof command the brief names was run on the brief's own branch | transcript |

@@ -1,9 +1,14 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install fmt lint types test cov arch check mutate
+.PHONY: help install fmt lint types test cov arch check mutate tree untree
 
 # `make mutate MUTANTS="kitpkg.core.text.*"` limits the run to matching mutants.
 MUTANTS ?=
+
+# `make tree` and `make untree` take one of these (scripts/tree.py says which go with which).
+BRIEF ?=
+BRANCH ?=
+NEW ?=
 
 help: ## list the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-8s %s\n", $$1, $$2}'
@@ -45,6 +50,12 @@ mutate: ## mutation testing from a clean cache; fails on survivors or untested m
 	set -f; uv run mutmut run $(MUTANTS)
 	uv run mutmut export-cicd-stats
 	uv run python scripts/mutation_gate.py
+
+tree: ## a worktree beside this checkout: make tree BRIEF=009 | BRANCH=<name> | NEW=<name>
+	uv run python scripts/tree.py tree $(if $(BRIEF),--brief '$(BRIEF)') $(if $(BRANCH),--branch '$(BRANCH)') $(if $(NEW),--new '$(NEW)')
+
+untree: ## remove a tree, keep its branch: make untree BRIEF=009 | BRANCH=<name>
+	uv run python scripts/tree.py untree $(if $(BRIEF),--brief '$(BRIEF)') $(if $(BRANCH),--branch '$(BRANCH)')
 
 # Project-owned targets (run, eval, deploy, …) live in project.mk. A kit update never touches it.
 -include project.mk

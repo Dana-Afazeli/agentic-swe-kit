@@ -11,8 +11,8 @@ shaped this way is in `PHILOSOPHY.md`; what each gate does is in `HARNESS.md`.
 | Actor | Who | Does |
 |---|---|---|
 | **The maintainer** | the human | Frames units, reads briefs and PRs, adds labels, merges, keeps the friction log honest |
-| **Planning session** | a Claude Code session in the development checkout (any model) | Runs `/brief-writer`: orients, interviews the maintainer, writes the next brief and the decision records |
-| **Implementer** | a *fresh* Claude Code session, started with `/implementer NNN` | Red → green → refactor; sets the page and the proofs comment; runs the review loop; answers the reviews |
+| **Planning session** | a Claude Code session in a tree of its own (any model) | Runs `/brief-writer`: orients, interviews the maintainer, writes the next brief and the decision records |
+| **Implementer** | a *fresh* Claude Code session in the brief's tree, started with `/implementer NNN` | Red → green → refactor; sets the page and the proofs comment; runs the review loop; answers the reviews |
 | **Reviewers** | two headless Claude Code processes the implementer starts with `scripts/review.py`: the conformance reviewer (`/reviewer conformance`, started with named tools and no agent file) and `/code-review`, each on a named model and effort, each in a throwaway clone of the PR's head | Report gaps between brief and diff, and correctness bugs; findings and a record of each run land on the PR |
 | **CI** | GitHub Actions on PRs to the base branch | The same `make check`, plus diff coverage, mutation on changed core modules, secret scan, gate-guard, integrity, prove |
 
@@ -22,17 +22,27 @@ Each role is a skill under `.claude/skills/` — the whole procedure of its work
 role needs and opens by sending a session to its skill; a rule that lives in a skill is invisible to
 a session that has not run it.
 
-**Checkouts.** Separate clones, never git worktrees: worktrees share `.git/hooks` and Claude Code's
-local settings with the main checkout. A *development checkout* is where briefs are
-executed and where the git hooks are installed; a *deployment checkout* (if the project runs
-something) is pinned to the base branch and pulled after merges, never the development checkout, so a
-branch switch cannot change what is running. Paths in documents are examples; the repository assumes
-no host.
+**Checkouts and trees.** The *development checkout* is where the git hooks are installed and where
+`make tree` is run; it stays on the base branch. Each brief runs in a *tree*: a git worktree of the
+development checkout, in a folder beside it (`make tree BRIEF=NNN`; `make tree NEW=<name>` makes a
+new branch from the base; `make untree BRIEF=NNN` removes the folder and keeps the branch). The
+trees share the checkout's `.git/hooks`, which is wanted: every brief runs the same hooks. A tree
+has its own committed `.claude/settings.json`, its own Stop gate and its own transcript; the
+checkout's `.claude/settings.local.json` and Claude Code's auto-memory are shared with every tree.
+A *deployment checkout* (if the project runs something) is pinned to the base branch and pulled
+after merges, never the development checkout, so a branch switch cannot change what is running.
+Paths in documents are examples; the repository assumes no host.
 
-**One session per checkout.** A Claude Code session owns the working tree it was started in. A
-second session that needs the repository at the same time — a planning session writing the next
-brief while an implementer runs, a documentation fix — clones its own copy (anywhere; deleted
-afterwards). Never run `git switch` or `git checkout` in a folder another session is using.
+**One session per tree.** A Claude Code session owns the tree it was started in, and a lock
+(`scripts/session_lock.py`, a file in the tree's own git directory) refuses the editing tools of a
+second session there. A second session that needs the repository at the same time — a planning
+session writing the next brief while an implementer runs, a documentation fix — makes a tree of its
+own, so briefs are built side by side. The lock is a net against accidents, not a wall: it stops
+`Edit`, `Write` and `NotebookEdit`, not the shell; it belongs to the tree the session was started in,
+not to the file; and a lock that nobody has touched for 30 minutes is free, so a new session in a
+tree waits for that, or for the lock file to be deleted by hand. `git switch` and `git checkout`
+are refused (the plain spelling: `git -C . switch` is not seen by a prefix rule), so a tree keeps
+its branch.
 
 **Models.** Sonnet at medium by default; Opus at high for a single hardest-judgment agent; the
 largest models only as reviewers of hard or high-stakes work, stingily; Haiku only for mechanical
@@ -52,8 +62,10 @@ reviewers' model and effort.
 4. **Implement** (`/implementer NNN`, a fresh session on the same branch): for each behaviour, failing
    test first → run it and show the failure → code → green → refactor. The Stop hook enforces `make check`; run
    `scripts/integrity.py --base origin/<base>` yourself before marking the PR ready (CI holds the
-   merge for a vanished test; the hook does not hold the session). Read the PR's
-   comments — top-level ones too — before each push and before marking it ready. The description is
+   merge for a vanished test; the hook does not hold the session). When the base has moved,
+   `git merge origin/<base>` and push before marking the PR ready: git keeps both sides' rows of
+   the two logs (`.gitattributes`), GitHub does not honour it and reports them as conflicts. Read
+   the PR's comments — top-level ones too — before each push and before marking it ready. The description is
    **the page** (`pr.py page`): at most 80 lines for the maintainer — what this is, the maintainer's
    steps, the decisions, what is not proven — then the reference parts the reviewers check; the proofs
    are one PR comment (`pr.py proofs`), verbatim from saved files.
@@ -77,10 +89,11 @@ reviewers' model and effort.
 
 - Numbered `NNN` in execution order; the brief-writer skill's `assets/brief.md` is the format. One screen.
   Self-contained: the implementer sees the brief and the repository, never the planning conversation.
-- **The brief is a PR.** The planning session creates the unit's branch `<prefix>-NNN-slug`, commits
-  only `docs/briefs/NNN-slug.md`, pushes, and opens a draft PR titled after the brief. The maintainer
-  approves with `brief-approved`. The implementer session then runs `git fetch && git switch
-  <prefix>-NNN-slug` and executes the brief on the same branch; when done it marks the PR ready.
+- **The brief is a PR.** The planning session, in a tree made with `make tree NEW=<prefix>-NNN-slug`,
+  commits only `docs/briefs/NNN-slug.md` on the unit's branch `<prefix>-NNN-slug`, pushes, and opens
+  a draft PR titled after the brief. The maintainer approves with `brief-approved`. The implementer
+  session then starts in that branch's tree (`make tree BRIEF=NNN`) and executes the brief on the
+  same branch; when done it marks the PR ready.
   Brief and implementation land together, so every merged unit carries its own record of intent.
   Nobody writes to the base branch except through this PR.
 - **Before writing brief N+1**, the planning session reads: the phase section in `docs/ROADMAP.md`,
