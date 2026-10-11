@@ -138,7 +138,10 @@ What you show is two things, and they are kept apart so that the maintainer's pa
    what the pull request is at its head, and nothing about its earlier versions or the
    conversation that shaped it. `references/page.md` has one filled page and three mistakes to
    avoid. The script refuses a page that is too long, has a part missing or with nothing under
-   it, or still holds a comment of the template; fix the page, not the script. It checks the
+   it, or still holds a comment of the template; fix the page, not the script. The first item
+   under "Next steps for the maintainer" says where the review stands, so that the maintainer
+   sees it before anything else: `Review: remaining` until the loop has closed (step 5 changes
+   it to `done` or `stopped`). It checks the
    page's shape and not its words: whether the page can be read cold is yours to get right, and
    the conformance reviewer's to judge.
 3. **I-11** Rebuild the page, and post the proofs again, at each push that changes the diff. The

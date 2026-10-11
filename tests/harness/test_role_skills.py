@@ -417,3 +417,36 @@ def test_a_decision_is_a_list_with_one_bullet_per_option_and_each_has_both_costs
     assert missing == []
     # one pair of labels: the older wording of the second one is gone
     assert not [place for place, text in places.items() if "What a user notices" in text]
+
+
+# --- the state of the review ----------------------------------------------------------------------
+
+
+def test_the_first_step_of_the_maintainer_says_whether_the_review_is_remaining_or_done() -> None:
+    """The maintainer's checklist opens with one line that says where the review stands:
+    `Review: remaining`, `Review: done` or `Review: stopped`. The template asks for it, the
+    example shows it, the implementer and the review loop each say when it is set, and the
+    conformance reviewer counts a page without it as not the page."""
+    states = ("Review: remaining", "Review: done", "Review: stopped")
+
+    def flat(*parts: str) -> str:
+        return " ".join((SKILLS.joinpath(*parts)).read_text("utf-8").split())
+
+    template = flat("implementer", "assets", "pr-page.md")
+    steps = template.split("## Next steps for the maintainer", 1)[1].split("## ", 1)[0]
+    example = flat("implementer", "references", "page.md")
+    example_steps = example.split("## Next steps for the maintainer", 1)[1].split("## ", 1)[0]
+    implementer = flat("implementer", "SKILL.md")
+    show_page = implementer.split("**I-10**", 1)[1].split("**I-11**", 1)[0]
+    loop = flat("review-loop", "SKILL.md")
+    close_out = loop.split("## 5. Close out", 1)[1]
+    conformance = flat("reviewer", "references", "conformance.md")
+    not_the_page = conformance.split("**P-07 Not the page.**", 1)[1].split("Not style", 1)[0]
+
+    assert all(state in steps for state in states)
+    assert "Review: remaining" in example_steps
+    assert "Review: remaining" in show_page
+    assert "Review: remaining" in loop.split("## 2.", 1)[0]
+    assert "Review: done" in close_out
+    assert "Review: stopped" in close_out
+    assert "Review:" in not_the_page

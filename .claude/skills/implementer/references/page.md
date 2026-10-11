@@ -21,6 +21,8 @@ Not in this unit: a way to mark one reminder as urgent enough to be sent at nigh
 for reminders that go to a group.
 
 ## Next steps for the maintainer
+- [ ] **Review: remaining.** The review loop has not started; this line says `done`, with each
+      reviewer's verdict, when it closes, and the merge waits for that.
 - [ ] **Read "Decisions for the maintainer" below and reply with one word.** The answer decides
       whether one more test is added before the merge.
 - [ ] **Add `gates-approved`** after reading the one-line change to `pyproject.toml` (a new

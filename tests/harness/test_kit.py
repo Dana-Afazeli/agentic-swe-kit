@@ -4,6 +4,7 @@
 template" on GitHub hands a new project. Kit-only: the kit's tree is what it tests.
 """
 
+import ast
 import fnmatch
 import os
 import re
@@ -1367,6 +1368,23 @@ def test_no_document_tells_a_session_to_switch_a_branch_or_says_worktrees_are_no
         for phrase in ("never git worktrees", "Separate clones", "Never git worktrees"):
             if phrase in text:
                 told.append(f"{path.relative_to(ROOT)}: {phrase}")
+
+    assert told == []
+
+
+def test_no_message_a_tool_of_the_kit_prints_tells_a_session_to_run_a_command_it_is_refused() -> (
+    None
+):
+    """The settings deny `git switch` and `git checkout`, so a message that `kit.py` or a script
+    prints must not name them as advice: a session that follows it is refused its first command.
+    `review.py` is left out: its list of commands a reviewer may not run is the refusal itself."""
+    files = [ROOT / "kit.py"]
+    files += [f for f in sorted((ROOT / "scripts").glob("*.py")) if f.name != "review.py"]
+    told: list[str] = []
+    for path in files:
+        for node in ast.walk(ast.parse(path.read_text("utf-8"))):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                told += [f"{path.name}: {s}" for s in switch_instructions(node.value)]
 
     assert told == []
 

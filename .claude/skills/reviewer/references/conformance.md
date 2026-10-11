@@ -70,7 +70,9 @@ head and base. If either is missing, say which and stop.
    and where it sits", "Next steps for the maintainer", "Decisions for the maintainer", "Not
    proven". Below it: "File by file", "Where this differs from the brief", "The review record",
    "Out of scope, noticed", "Docs made stale, and fixed", "Gate files changed", "Checks
-   weakened". The page is short so that the maintainer reads all of it.
+   weakened". Also this kind: the first item under "Next steps for the maintainer" does not say
+   where the review stands (`Review: remaining`, `Review: done` or `Review: stopped`), or says
+   `done` while a finding is still open. The page is short so that the maintainer reads all of it.
 
 Not style, not naming, not other designs, not performance, not bugs you happen to see, not
 "consider adding". An unconstrained reviewer invents work. If you are unsure whether something is
