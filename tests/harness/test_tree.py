@@ -499,6 +499,22 @@ def test_untree_removes_a_tree_whose_ignored_files_can_all_be_rebuilt(
     assert not made_tree.exists()
 
 
+def test_untree_removes_a_tree_that_holds_the_import_linter_cache(
+    main_checkout: Path, made_tree: Path
+) -> None:
+    """`make arch` makes the folder, with a `.gitignore` of its own that ignores everything in it,
+    so git lists it as ignored and no `.gitignore` of the project names it."""
+    cache = made_tree / ".import_linter_cache"
+    cache.mkdir()
+    (cache / ".gitignore").write_text("*\n", "utf-8")
+    (cache / "pkg.meta.json").write_text("{}\n", "utf-8")
+
+    code = tree.main(["untree", "--brief", "009"], cwd=main_checkout, sync=Syncs())
+
+    assert code == 0
+    assert not made_tree.exists()
+
+
 def test_a_second_tree_for_a_brief_starts_at_origin_when_its_local_branch_is_behind(
     main_checkout: Path, made_tree: Path
 ) -> None:

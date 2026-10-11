@@ -44,7 +44,7 @@ GIT_TIMEOUT_S = 300  # for one git command; a fetch or a worktree takes seconds
 # (.env, a local settings file, a log) is somebody's, and is named in a refusal.
 REBUILDABLE = frozenset(
     {".venv", ".pytest_cache", ".ruff_cache", ".hypothesis", ".coverage", "coverage.xml"}
-    | {"mutants", "dist", ".DS_Store"}
+    | {"mutants", "dist", ".DS_Store", ".import_linter_cache"}
 )
 
 Syncer = Callable[[Path], int]
