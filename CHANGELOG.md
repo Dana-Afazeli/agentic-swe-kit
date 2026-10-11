@@ -50,6 +50,9 @@ moves to.
   so a kit update's branch is made with `make tree NEW=<prefix>-kit-update`, and the update runs in
   that tree; a project whose `Makefile` has no `tree` target yet makes the tree by hand with
   `git worktree add -b <prefix>-kit-update ../<folder>-<prefix>-kit-update origin/<base>`.
+  **A project made from an earlier kit has the three empty rows of the old template in its own
+  `docs/BACKLOG.md`**: the new table check names them ("the same row") and its gate is red until
+  they are deleted, because the update never touches a project-owned file.
   `.gitattributes` (kit-owned, a gate file) gives `docs/BACKLOG.md` and `docs/FRICTION.md`
   `merge=union`, and `tests/harness/test_doc_tables.py` finds what a union merge can leave behind;
   GitHub does not honour the attribute, so a branch merges the base and is pushed before
