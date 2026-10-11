@@ -219,9 +219,8 @@ Say which is which when you report; do not present a request as a control.
 - `grep` here is ugrep and rejects some bounded patterns; use a short Python file for context.
 - The project's hooks run in a reviewer process too. The Stop hook stands aside there (the launcher
   marks the process with `KIT_REVIEWER_CLONE=1`): a reviewer changes nothing, and a red gate on the
-  PR under review is the author's to pass. Before that marker existed, both reviewers of the kit's
-  first pull request ran to their time limits on the branch's own red with their reports written
-  and unposted.
+  PR under review is the author's to pass. Without that marker both reviewers would run to their
+  time limits on the branch's own red, with their reports written and unposted.
 - On a PR that has no brief, plan-reviewer cannot run: use `--only code` in every round. The
   `next:` line then closes the loop on the code review alone and says that plan-reviewer had no
   brief. With a brief, `--only` never closes the loop: the line asks for the reviewer left out.

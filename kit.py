@@ -14,7 +14,7 @@ kit version), re-locks and runs the gate. `update` fetches the kit, renders it a
 version and at the new one with the same answers, and three-way merges every kit-owned file
 (`git merge-file`): what the project never touched updates cleanly, its additions survive, a real
 collision is a conflict marker it lists. `render_text` is shared, which is what makes that merge
-sound (ADR-0007). `status` says where a project stands.
+sound. `status` says where a project stands.
 
 The kit's own tree holds real default values, not templating syntax: package `kitpkg`, base branch
 `main`, branch prefix `main`, the maintainer as the phrase "the maintainer", Python 3.13.12. Each
@@ -208,6 +208,10 @@ PROJECT_OWNED = (
     "tests/conftest.py",
     "tests/test_*.py",
     "uv.lock",
+    # the two places a project keeps its own records, empty; they sit under kit-only `*` patterns
+    # below, and the first match wins
+    "docs/briefs/.gitkeep",
+    "docs/research/.gitkeep",
 )
 # Present in the kit only: removed by `init`, or replaced by a seed below. The first group is
 # checked before the kit-owned patterns, which would otherwise claim these exact paths.
@@ -218,16 +222,19 @@ KIT_ONLY_FIRST = (
     "docs/ROADMAP.md",
     "docs/FRICTION.md",
     "docs/BACKLOG.md",
+    "docs/MAINTAINING.md",
     "tests/harness/test_kit.py",  # tests the kit's own tree and `init`; meaningless in a project
     "tests/harness/test_no_leftovers.py",  # scans for the source project's names; the kit's only
+    "tests/harness/test_stateless.py",  # renders the kit as a project and scans it
 )
 KIT_ONLY = (
     "docs/decisions/*",
     "docs/briefs/*",  # the kit's own briefs; a project's first comes from the brief-writer skill
+    "docs/research/*",  # the kit's dated lookups; a project keeps its own beside `.gitkeep`
     "docs/templates/*",
 )
-# Copied as they are: this file's constants *are* the kit's placeholders, and rendering it would
-# rewrite them (the first version did, and the second `init` then refused the project's own name).
+# Copied as they are: this file's constants *are* the kit's placeholders; rendering it would
+# rewrite them, and a second `init` would then refuse the project's own name.
 VERBATIM = ("kit.py",)
 # Seeds: a kit file whose rendered copy becomes a project-owned file.
 SEEDS = {
@@ -405,8 +412,8 @@ class Lock:
     """What `kit.lock` records: the kit a project came from, and the answers it was rendered with.
 
     `commit` is the kit commit the project's kit-owned files were rendered from — empty after
-    `init` from a template copy (GitHub squashes the kit's history), so `update` then starts from
-    the tag `v<version>`; `update` records the commit it moved to.
+    `init` from a template copy (the copy carries no kit history to name), so `update` then starts
+    from the tag `v<version>`; `update` records the commit it moved to.
     """
 
     version: str

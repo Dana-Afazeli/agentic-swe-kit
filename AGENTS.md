@@ -67,8 +67,8 @@ anything else. A rule that lives in a skill is invisible to a session that has n
   in the same PR.
 
 ## Facts and state
-- Facts about Claude Code and the tools come from `docs/kit/research/` and `docs/research/`, not
-  from memory. If a fact is missing, look it up, verify it, and write it down there with the date.
+- Facts about Claude Code and the tools come from `docs/research/`, not from memory. If a fact is
+  missing, look it up, verify it, and write it down there with the date.
 - State lives in files and git, never in a conversation: the next session sees only the repository.
 - One session per checkout. Never `git switch` in a folder another session is using; clone a copy.
 - `make eval` costs money: run it only when a brief says so. No global installs: everything goes

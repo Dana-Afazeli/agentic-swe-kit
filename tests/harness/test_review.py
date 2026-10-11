@@ -124,7 +124,7 @@ def test_a_green_reviewer_is_not_run_again() -> None:
 
 
 def test_a_green_from_an_older_head_is_kept_and_said_to_be_older() -> None:
-    # PR #11 review, round 1: a green is not tied to a head. It still stops the reviewer (the
+    # a green is not tied to a head. It still stops the reviewer (the
     # loop's rule), but the call now says that commits have landed since, and how to run it again.
     seen = [Record("code", 1, "b" * 40, "green")]
     to_run, notes = review.select(seen, ["code"], expired=[], rounds=3, head=HEAD)
@@ -136,14 +136,14 @@ def test_a_green_from_an_older_head_is_kept_and_said_to_be_older() -> None:
 
 
 def test_a_record_with_a_short_head_is_not_taken_for_an_older_one() -> None:
-    # PR #11 review, round 2: a marker may carry 7 digits of the head, and 7 never equal 40.
+    # a marker may carry 7 digits of the head, and 7 never equal 40.
     seen = [Record("code", 1, "a" * 7, "green")]
     notes = review.select(seen, ["code"], expired=[], rounds=3, head=HEAD)[1]
     assert notes == ["code-review: green in round 1, not run again"]
 
 
 def test_of_two_records_for_one_round_the_later_comment_counts() -> None:
-    # PR #11 review, round 1: on a tie the older record won.
+    # on a tie the older record won.
     seen = records(("code", 1, "findings:2"), ("code", 1, "green"))
     assert review.select(seen, ["code"], expired=[], rounds=3, head=HEAD)[0] == []
     seen = records(("code", 1, "green"), ("code", 1, "findings:2"))
@@ -192,7 +192,7 @@ def test_a_number_of_rounds_below_one_is_refused(rounds: str) -> None:
 @pytest.mark.parametrize("option", ["--timeout-min", "--budget-usd"])
 @pytest.mark.parametrize("value", ["0", "-5", "none", "nan", "inf"])
 def test_a_limit_of_zero_or_less_is_refused(option: str, value: str) -> None:
-    # PR #11 review, round 1: 0 was taken as "not given" and became the default; -5 was accepted.
+    # 0 was taken as "not given" and became the default; -5 was accepted.
     # Round 2: nothing pinned that "not a number" and "no limit at all" are refused too.
     with pytest.raises(SystemExit) as stop:
         review.parse_call(["10", option, value])
@@ -447,7 +447,7 @@ def test_every_reviewer_process_gets_the_same_controls(reviewer: str) -> None:
 def test_the_plan_prompt_names_the_brief_the_pr_and_the_verdict_line() -> None:
     prompt = review.plan_prompt(PR, Path("docs/briefs/006-dm-live.md"), 1, 3)
     assert "Brief: docs/briefs/006-dm-live.md" in prompt
-    # the base is named as the clone has it: a local `main` may be missing or stale (PR #11 review)
+    # the base is named as the clone has it: a local `main` may be missing or stale
     assert f"PR: 10 (head {HEAD}, base origin/main)" in prompt
     assert "VERDICT: GREEN" in prompt
     assert "VERDICT: FINDINGS <number of findings>" in prompt
@@ -545,7 +545,7 @@ def test_the_reviewers_environment_leaves_out_the_launchers_virtual_environment(
         "HOME": "/home/x",
     }
     # The marker tells the Stop hook that this is a reviewer's clone: a reviewer changes nothing,
-    # and the branch's own red (a renamed test awaiting the label) must not hold it (PR 1).
+    # and the branch's own red (a renamed test awaiting the label) must not hold it.
     marker = {review.REVIEWER_CLONE_VARIABLE: "1"}
     assert review.reviewer_env(environ, Path("/work/checkout")) == {
         "PATH": "/usr/bin:/bin",
@@ -562,7 +562,7 @@ def test_the_reviewers_environment_leaves_out_the_launchers_virtual_environment(
 
 
 def test_a_command_that_does_not_come_back_is_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
-    # PR #11 review, round 3: `git clone`, `uv sync` and `gh` ran with no limit of their own,
+    # `git clone`, `uv sync` and `gh` ran with no limit of their own,
     # outside the two reviewers' time limits.
     monkeypatch.setattr(review, "COMMAND_TIMEOUT_S", 1)
     hung = review.run_in_root([sys.executable, "-c", "import time; time.sleep(30)"])
@@ -610,7 +610,7 @@ def test_a_commit_in_a_clone_does_not_get_out_by_an_ordinary_push(
 ) -> None:
     # A reviewer may commit in its clone; that reaches nobody. Two things stand between the clone
     # and the origin: `origin` has no push address, and a pre-push hook refuses every push, also
-    # one to an address typed out (PR #11 review, round 3: that one got through).
+    # one to an address typed out (that one got through).
     bare, pr = origin
     clone = bare.parent / "run" / "clone"
     review.make_clone(review.run_in_root, str(bare), pr, clone)
@@ -645,7 +645,7 @@ def test_a_push_made_on_purpose_still_gets_out_of_a_clone(
 
 
 def test_a_clone_without_the_prs_base_is_refused(origin: tuple[Path, PullRequest]) -> None:
-    # PR #11 review, round 3: only the head was checked. The reviewers are told `origin/<base>`,
+    # only the head was checked. The reviewers are told `origin/<base>`,
     # and the Stop hook in the clone needs it too.
     bare, pr = origin
     clone = bare.parent / "run" / "clone"
@@ -781,7 +781,7 @@ class Hub:
             return done(args, code=1, err="gh: Not Found (HTTP 404)")
         if args[:3] == ["gh", "api", "repos/o/r/pulls/10/comments"]:
             # Findings only: a reply has `in_reply_to_id`, and the author may answer while a
-            # review runs (PR #11 review, round 3: of 30 inline comments 15 were replies).
+            # review runs (of 30 inline comments 15 were replies).
             top_level = ".[] | select(.in_reply_to_id == null) | .id"
             assert args[3:] == ["--paginate", "--jq", top_level], args
             self.inline_counts += 1
@@ -1019,7 +1019,7 @@ def test_only_limits_the_call_to_one_reviewer_and_needs_no_brief() -> None:
 def test_with_only_the_close_out_does_not_wait_for_a_reviewer_that_was_left_out(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # PR #11 review, round 2: on a PR without a brief a green code review said "run this command
+    # on a PR without a brief a green code review said "run this command
     # without --only", and that call is refused with "or --only code": the loop never closed.
     hub = Hub()
     claude = Claude(hub, code=[turn(OPUS, sub=True), result("VERDICT: GREEN")])
@@ -1036,7 +1036,7 @@ def test_with_only_the_close_out_does_not_wait_for_a_reviewer_that_was_left_out(
 def test_a_reviewer_that_was_left_out_and_can_run_is_waited_for(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # PR #11 review, round 3: the fix above let go of every reviewer that had never run, so
+    # the fix above let go of every reviewer that had never run, so
     # `--only plan` with a green plan-reviewer closed the loop without a code review, and
     # `--only code` on a PR that has a brief closed it without plan-reviewer.
     hub = Hub()
@@ -1068,7 +1068,7 @@ def test_with_only_a_reviewer_that_has_open_findings_is_still_waited_for(
 def test_the_inline_comments_are_counted_before_anything_is_launched(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # PR #11 review, round 1: the count was taken after plan-reviewer had run, so a failing `gh`
+    # the count was taken after plan-reviewer had run, so a failing `gh`
     # ended the call with exit 2, which says that nothing was launched.
     hub = Hub(inline_fails_from=1)
     claude = Claude(hub)
@@ -1180,7 +1180,7 @@ def test_a_checkout_on_no_branch_is_said_in_words(capsys: pytest.CaptureFixture[
 
 
 def test_the_clones_are_removed_also_when_the_call_breaks_off(work: Path) -> None:
-    # PR #11 review, round 3: nothing pinned that a clone is removed on every way out.
+    # nothing pinned that a clone is removed on every way out.
     hub = Hub()
 
     def launch(
@@ -1198,7 +1198,7 @@ def test_the_clones_are_removed_also_when_the_call_breaks_off(work: Path) -> Non
 def test_a_second_call_for_a_reviewer_that_is_running_is_refused(
     capsys: pytest.CaptureFixture[str], work: Path
 ) -> None:
-    # PR #11 review, round 3: two calls at once shared one folder and one clone path; the second
+    # two calls at once shared one folder and one clone path; the second
     # removed the clone under the first reviewer, and both posted a record for the same round.
     hub = Hub()
     claude = Claude(hub, code=[turn(OPUS, sub=True), result("VERDICT: GREEN")])
@@ -1313,7 +1313,7 @@ def test_a_run_on_another_model_is_said_in_the_record_and_stands(
 def test_a_process_that_exits_with_an_error_is_a_failed_run(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # PR #11 review, round 2: nothing pinned this, nor the next five behaviours.
+    # nothing pinned this, nor the next five behaviours.
     hub = Hub()
     claude = Claude(hub, code=[turn(OPUS, sub=True), result("VERDICT: GREEN")], exit_code=3)
     assert review.main(CODE_ONLY, run=hub, launch=claude) == 1
@@ -1417,7 +1417,7 @@ def test_changes_a_reviewer_left_in_its_clone_are_pointed_out_and_harm_nothing(
         "it was asked to stay read-only"
     )
     assert f"  warning: {warning}\n" in out
-    # PR #11 review, round 2: the record on the PR read like that of a clean run
+    # the record on the PR read like that of a clean run
     assert f"Warning: {warning}\n" in hub.posted[0]
 
 

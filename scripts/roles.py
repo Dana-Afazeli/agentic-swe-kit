@@ -55,7 +55,7 @@ ALSO = {"implementer": (Path("review-loop") / "SKILL.md",)}
 # An id follows two stars: `**I-07**`, or `**P-05 proof missing**` where the rule has a name.
 ID = re.compile(r"[A-Z]-\d\d")
 SHAPE = "an id is one capital letter, a dash and two digits"
-# A near miss: a letter or two, a dash, digits. `ADR-0011` and `UTF-8` are not (three letters),
+# A near miss: a letter or two, a dash, digits. `RFC-2119` and `UTF-8` are not (three letters),
 # nor is `e-mail` (no digits) or `3-2-1` (no letters).
 NEAR_MISS = re.compile(r"[A-Za-z]{1,2}-\d+[A-Za-z0-9]*")
 # Two stars and a word of letters, a dash and digits, wherever they stand in the text; and the

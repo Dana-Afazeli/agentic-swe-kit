@@ -1,4 +1,4 @@
-"""PreToolUse guard for the Bash tool (brief 002): refuse the few commands that must not run.
+"""PreToolUse guard for the Bash tool: refuse the few commands that must not run.
 
 Claude Code passes the hook's JSON on stdin. Exit 2 with a one-line reason on stderr refuses the
 command; exit 0 leaves it to the normal permission flow.
@@ -31,7 +31,7 @@ cannot read the way the shell does is refused: an unbalanced quote, a `case` ins
 a `"` inside `"${ … }"`, a `<<` inside `(( … ))`, zsh's `${(e)…}`.
 
 "The shell" is the user's: Claude Code runs the Bash tool through it, with its aliases, functions
-and options (docs/kit/research/2026-10-03-claude-code-hooks.md): zsh on a Mac, bash on CI. So the
+and options: zsh on a Mac, bash on CI. So the
 guard also steps over zsh's words in front of a command (`noglob`, `repeat N`, `=rm`, a short
 `if [[ … ]] rm x`) and knows zsh's redirections (`>!`). tests/test_guard_bash.py asks each shell
 that is installed whether it and the guard agree. Unseen, as above: an alias or a function from
@@ -39,10 +39,9 @@ the startup file, a script made on the fly and sourced (`source =(…)`, `. <(�
 qualifier that runs code (`*(e:'…':)`).
 
 The reader holds against habit, not against a search. The tests ask the shells about the lines
-someone has thought of; a review that went looking (PR #5, round 8) found ten more that hide a
-command — a `#` or a `<<` inside `${ … }`, zsh's `{ … } always { … }` and `else { … }` — and
-zsh's glob groups, `Makefil(e|x)`, which the reader takes for a subshell. docs/BACKLOG.md lists
-them, with what would end the class: a real shell parser.
+someone has thought of; a search finds more that hide a command — a `#` or a `<<` inside
+`${ … }`, zsh's `{ … } always { … }` and `else { … }` — and zsh's glob groups, `Makefil(e|x)`,
+which the reader takes for a subshell. What would end the class is a real shell parser.
 """
 
 import fnmatch
@@ -731,7 +730,7 @@ _WRITERS = frozenset({"tee", "truncate", "sed", "perl", "cp", "mv", "install"})
 
 
 def _written(name: str, args: list[str]) -> list[str]:
-    """The words a command writes to — for the writers brief 002 lists, nothing for the rest."""
+    """The words a command writes to — for the writers in `_WRITERS`, nothing for the rest."""
     if name not in _WRITERS:  # nothing to judge, so nothing to expand
         return []
     args = [expanded for arg in args for expanded in expand_braces(arg)]  # `mv Makefile{,.old}`

@@ -1,4 +1,4 @@
-"""PostToolUse hook for Edit and Write (brief 002): `ruff format` the Python file just edited.
+"""PostToolUse hook for Edit and Write: `ruff format` the Python file just edited.
 
 Formatting only — never `ruff check --fix`: an autofix would delete an import that one edit adds
 and the next edit uses. The hook never blocks (exit 0 always). When ruff cannot format the file,

@@ -80,7 +80,8 @@ conflict markers that `update` lists. The result is a PR that touches gate files
 | `.claude/skills/` | the three roles as skills — `brief-writer`, `implementer`, `reviewer` — with numbered rules, their templates (the brief, the page) and `pr.py`; and `review-loop`, which starts the reviewers |
 | `.github/workflows/ci.yml` | jobs `check`, `mutation`, `secrets`, `integrity`, `gate-guard`, `prove` |
 | `AGENTS.md` | what every session loads here: which skill is its role, the gate, the rules every role shares |
-| `docs/kit/` | `PHILOSOPHY.md`, `WORKFLOW.md`, `HARNESS.md`, `SETUP.md`, dated research notes |
+| `docs/kit/` | `PHILOSOPHY.md`, `WORKFLOW.md`, `HARNESS.md`, `SETUP.md` |
+| `docs/research/` | the kit's dated, verified research notes; kit-only, a project gets the folder empty |
 | templates | the brief and the page (in the skills' `assets/`), the ADR (`docs/decisions/0000-TEMPLATE.md`), and the project files `init` seeds |
 
 ## Map of the documents
@@ -90,8 +91,8 @@ conflict markers that `update` lists. The result is a PR that touches gate files
   review loop, the weekly outer loop, the documentation lifecycle, compounding.
 - `docs/kit/HARNESS.md` — the specification: toolchain, targets, the gates table, the contract,
   CI, hooks, the file-ownership rule that makes updates painless.
-- `docs/kit/SETUP.md` — applying the kit to a project, customising it, taking updates,
-  maintaining the kit itself.
+- `docs/kit/SETUP.md` — applying the kit to a project, customising it, taking updates.
+- `docs/MAINTAINING.md` — maintaining the kit itself: changes, releases, what a project receives.
 - `docs/decisions/` — the kit's own decision records. `docs/FRICTION.md`, `docs/BACKLOG.md` — the
   kit's own friction log and backlog.
 

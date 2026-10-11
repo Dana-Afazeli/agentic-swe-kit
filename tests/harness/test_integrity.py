@@ -110,7 +110,7 @@ def test_collect_ids_uses_the_trees_own_configuration(tmp_path: Path) -> None:
 
 
 def test_collect_ids_keeps_a_module_that_fails_to_import_as_one_entry(tmp_path: Path) -> None:
-    """Its tests cannot be listed, so the module itself stands in for them (brief 002, item 4)."""
+    """Its tests cannot be listed, so the module itself stands in for them."""
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_ok.py").write_text("def test_a() -> None: ...\n", "utf-8")
     (tmp_path / "tests" / "test_bad.py").write_text(
@@ -124,7 +124,7 @@ def test_collect_ids_keeps_a_module_that_fails_to_import_as_one_entry(tmp_path: 
 
 
 def test_collect_ids_reports_a_broken_module_when_nothing_else_collects(tmp_path: Path) -> None:
-    """With no test ID at all pytest prints no listing; the module must not be lost (PR #5)."""
+    """With no test ID at all pytest prints no listing; the module must not be lost."""
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_bad.py").write_text('raise RuntimeError("x")\n', "utf-8")
 
@@ -143,7 +143,7 @@ def test_collect_ids_names_a_broken_module_relative_to_the_tree(tmp_path: Path) 
 
 def test_collect_ids_imports_the_trees_own_package_not_the_installed_one(tmp_path: Path) -> None:
     """The base tree's tests import the base tree's `src/`: a module the PR renamed or removed
-    must not turn every test that used it into a "vanished" one (PR #5 review)."""
+    must not turn every test that used it into a "vanished" one."""
     (tmp_path / "src" / "pkg").mkdir(parents=True)
     (tmp_path / "src" / "pkg" / "__init__.py").write_text("", "utf-8")
     (tmp_path / "src" / "pkg" / "only_in_this_tree.py").write_text("VALUE = 1\n", "utf-8")
@@ -160,7 +160,7 @@ def test_collect_ids_imports_the_trees_own_package_not_the_installed_one(tmp_pat
 def test_collect_ids_does_not_depend_on_what_the_tree_makes_pytest_print(
     addopts: str, tmp_path: Path
 ) -> None:
-    """One word in `addopts` changes what pytest prints; it must not empty the set (PR #5)."""
+    """One word in `addopts` changes what pytest prints; it must not empty the set."""
     (tmp_path / "pyproject.toml").write_text(
         f'[tool.pytest.ini_options]\naddopts = "{addopts}"\n', "utf-8"
     )
@@ -205,7 +205,7 @@ def test_behind_live() -> None: ...
 
 def test_collect_ids_leaves_out_what_make_check_does_not_run(tmp_path: Path) -> None:
     """`make check` runs pytest with a marker expression. A test moved behind `eval` or `live`
-    is still collected without it, and no longer run: it must leave the set (PR #5, round 3)."""
+    is still collected without it, and no longer run: it must leave the set."""
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_t.py").write_text(MARKED_TEST, "utf-8")
 
@@ -300,7 +300,7 @@ def test_check_reports_all_three_kinds(repo: Path) -> None:
 @pytest.mark.parametrize("attributes", ["*.py -diff\n", "*.py binary\n", "*.py diff=none\n"])
 def test_check_reads_the_lines_whatever_gitattributes_says(repo: Path, attributes: str) -> None:
     """With such a line git prints "Binary files differ" and no lines: nothing would be listed,
-    and `.gitattributes` is no gate file (PR #5 review, round 8)."""
+    and `.gitattributes` is no gate file."""
     expected: dict[str, list[str]] = CASES["end_to_end"]["expected"]
     (repo / ".gitattributes").write_text(attributes, "utf-8")
 

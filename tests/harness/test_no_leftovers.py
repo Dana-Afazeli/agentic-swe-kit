@@ -21,7 +21,7 @@ SOURCE_TOKENS = (
     "origin/v2",
 )
 CITES_THE_SOURCE = (
-    "docs/kit/research/*",
+    "docs/research/*",
     "CHANGELOG.md",
     "docs/decisions/*",
     "uv.lock",
