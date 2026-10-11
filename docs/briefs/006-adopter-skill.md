@@ -12,7 +12,8 @@ two manifest lines; `.claude/skills/adopter/**`: new files under a gate folder) 
 Needs merged: PR 5 (brief 005). The skill copies from a render, and after PR 5 a render holds no
 record of the kit; PR 5 also numbers the roadmap's units. Once it is on `main`, bring this branch
 up to date (`git merge origin/main`) before the first test: the criteria use brief 005's fixture
-and manifest.
+and manifest. Brief 007 (parallel trees) is built before this one: when it is on `main`, this
+session runs in the brief's own tree, as the implementer skill then says.
 Size: about 650 added lines — a skill of at most 200 lines, three reference files, one test
 module, a decision record. This brief is longer than one screen: it carries the rules the skill
 has to hold.
@@ -53,7 +54,8 @@ every file of a rendered project one of four classes, and a test keeps the table
 - No line in `AGENTS.md`'s "Roles" and no copy in a project made by `init`: the skill has nothing
   to do there.
 - `tests/harness/**` is not carried into a target.
-- `make prove` (brief 007) and the rehearsal of the kit itself (brief 008).
+- Parallel trees (brief 007), `make prove` (brief 008) and the rehearsal of the kit itself
+  (brief 009).
 
 ## Inputs
 - `.claude/skills/brief-writer/` and `.claude/skills/implementer/` — the shape of a role skill:
@@ -197,7 +199,7 @@ the maintainer names; ask for its path once, before the run. After the run:
 
 Also: `README.md` "Quick start" gains "An existing repository" (copy `.claude/skills/adopter/`
 into it, start a session there, `/adopter <path of a clone of the kit>`); `CHANGELOG.md`
-("Unreleased"); `docs/ROADMAP.md` gains this unit as 2d; the "Non-Python variants" row of
+("Unreleased"); `docs/ROADMAP.md` gains this unit (brief 006); the "Non-Python variants" row of
 `docs/BACKLOG.md` reads `→ roadmap`.
 
 A criterion a trivial test could satisfy is not a criterion. Existing tests may not be removed,
