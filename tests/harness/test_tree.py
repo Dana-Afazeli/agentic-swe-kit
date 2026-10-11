@@ -403,7 +403,12 @@ def test_a_target_without_its_variable_is_refused_by_the_script_with_exit_2() ->
     is run with this interpreter: `uv run` looks for the project's own Python, which a machine
     that runs a rendered project's tests may not have."""
     recipe = subprocess.run(
-        ["make", "-n", "tree"], cwd=ROOT, capture_output=True, text=True, check=False, timeout=60
+        ["make", "-n", "--no-print-directory", "tree"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
     )
     done = subprocess.run(
         [sys.executable, "scripts/tree.py", "tree"],
